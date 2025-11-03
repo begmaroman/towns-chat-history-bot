@@ -1,4 +1,5 @@
 import { makeTownsBot } from '@towns-protocol/bot'
+import { streamIdAsBytes } from '@towns-protocol/sdk'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import commands from './commands'
@@ -41,10 +42,18 @@ bot.onMessage(async (handler, { message, channelId, eventId, createdAt }) => {
         await handler.sendReaction(channelId, eventId, '👍')
         return
     }
+    if (message.includes('summarize')) {
+        const resp = await bot.client.rpc.getMiniblocks({
+            streamId: streamIdAsBytes(channelId),
+            fromInclusive: BigInt(0),
+            toExclusive: BigInt(10),
+            omitSnapshots: true,
+        })
+        console.log(resp)
+    }
 })
 
 bot.onReaction(async (handler, { reaction, channelId }) => {
-    console.log(reaction, reaction === '👋')
     if (reaction === '👋' || reaction === 'wave') {
         await handler.sendMessage(channelId, 'I saw your wave! 👋')
     }
