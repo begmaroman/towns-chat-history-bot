@@ -45,7 +45,7 @@ bot.onMessage(async (handler, { message, channelId, eventId, createdAt }) => {
 
 bot.onReaction(async (handler, { reaction, channelId }) => {
     console.log(reaction, reaction === '👋')
-    if (reaction === '👋') {
+    if (reaction === '👋' || reaction === 'wave') {
         await handler.sendMessage(channelId, 'I saw your wave! 👋')
     }
 })
