@@ -30,6 +30,12 @@ export function registerSummarizeHandler(bot: AppBot): void {
             return
         }
 
+        const pending = await handler.sendMessage(
+            event.channelId,
+            'Preparing a summary... 📝',
+            threadOptions(event),
+        )
+
         let messages = getMessages({
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
@@ -64,8 +70,9 @@ export function registerSummarizeHandler(bot: AppBot): void {
             })
 
             if (!fallbackMessages.length) {
-                await handler.sendMessage(
+                await handler.editMessage(
                     event.channelId,
+                    pending.eventId,
                     "I haven't seen any messages in this channel yet. I'll start keeping track now!",
                     threadOptions(event),
                 )
@@ -109,11 +116,17 @@ export function registerSummarizeHandler(bot: AppBot): void {
                 .filter(Boolean)
                 .join('\n')
 
-            await handler.sendMessage(event.channelId, response, threadOptions(event))
+            await handler.editMessage(
+                event.channelId,
+                pending.eventId,
+                response,
+                threadOptions(event),
+            )
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error'
-            await handler.sendMessage(
+            await handler.editMessage(
                 event.channelId,
+                pending.eventId,
                 `Failed to generate summary: ${message}`,
                 threadOptions(event),
             )

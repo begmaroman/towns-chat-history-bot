@@ -23,6 +23,7 @@ type RecordedMessage = {
     channelId: string
     message: string
     opts?: Parameters<BotHandler['sendMessage']>[2]
+    eventId: string
 }
 
 function createMockBot() {
@@ -79,10 +80,31 @@ function createMockBot() {
 
 function createActionRecorder() {
     const sentMessages: RecordedMessage[] = []
+    let counter = 0
+
+    const upsertMessage = (entry: RecordedMessage) => {
+        const index = sentMessages.findIndex((m) => m.eventId === entry.eventId)
+        if (index === -1) {
+            sentMessages.push(entry)
+        } else {
+            sentMessages[index] = entry
+        }
+    }
+
     const handler = {
         async sendMessage(channelId: string, message: string, opts?: Parameters<BotHandler['sendMessage']>[2]) {
-            sentMessages.push({ channelId, message, opts })
-            return { eventId: 'reply-event', prevMiniblockHash: new Uint8Array() }
+            const eventId = `sent-${++counter}`
+            upsertMessage({ channelId, message, opts, eventId })
+            return { eventId, prevMiniblockHash: new Uint8Array() }
+        },
+        async editMessage(
+            channelId: string,
+            eventId: string,
+            message: string,
+            opts?: Parameters<BotHandler['editMessage']>[3],
+        ) {
+            upsertMessage({ channelId, message, opts, eventId })
+            return { eventId, prevMiniblockHash: new Uint8Array() }
         },
     } as unknown as BotHandler
 
