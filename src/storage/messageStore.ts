@@ -71,6 +71,7 @@ export function removeMessage(channelId: string, eventId: string): void {
 export function getMessages(query: MessageQuery): StoredMessage[] {
     const channelStore = messagesByChannel.get(query.channelId)
     if (!channelStore) {
+        console.log("No messages found for channel:", query.channelId)
         return []
     }
 
