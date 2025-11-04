@@ -37,7 +37,6 @@ function getChannelStore(channelId: string): Map<string, StoredMessage> {
 }
 
 export function saveMessage(message: SaveMessageInput): void {
-    console.log("Saving message:", message.eventId, "in channel:", message.channelId)
     const channelStore = getChannelStore(message.channelId)
     channelStore.set(message.eventId, {
         ...message,
@@ -72,7 +71,6 @@ export function removeMessage(channelId: string, eventId: string): void {
 export function getMessages(query: MessageQuery): StoredMessage[] {
     const channelStore = messagesByChannel.get(query.channelId)
     if (!channelStore) {
-        console.log("No messages found for channel:", query.channelId)
         return []
     }
 
