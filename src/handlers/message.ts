@@ -12,16 +12,5 @@ export function registerMessageHandler(bot: AppBot): void {
             message: event.message,
             createdAt: event.createdAt,
         })
-
-        if (event.userId === bot.botId) {
-            return
-        }
-
-        if (event.isMentioned) {
-            await handler.sendMessage(
-                event.channelId,
-                'Hi there! Use `/summarize [duration]` if you need a recap of recent activity.',
-            )
-        }
     })
 }
