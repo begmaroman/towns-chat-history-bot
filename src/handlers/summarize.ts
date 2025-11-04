@@ -1,5 +1,5 @@
 import type { AppBot } from '../types'
-import { getMessages } from '../storage/messageStore'
+import { getMessages, getRecentMessages } from '../storage/messageStore'
 import { parseTimeframe } from '../utils/timeframe'
 import { summarizeConversation } from '../utils/summarizer'
 
@@ -20,7 +20,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
             return
         }
 
-        const messages = getMessages({
+        let messages = getMessages({
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
             start: timeframe.start,
@@ -28,30 +28,57 @@ export function registerSummarizeHandler(bot: AppBot): void {
             limit: 400,
         })
 
+        let summaryLabel = timeframe.label
+        let summaryStart = timeframe.start
+        let summaryEnd = timeframe.end
+        let fallbackNote: string | undefined
+
         if (!messages.length) {
-            await handler.sendMessage(
-                event.channelId,
-                `I don't have any stored messages for the past ${timeframe.label}.`,
-                threadOptions(event),
-            )
-            return
+            const fallbackMessages = getRecentMessages({
+                channelId: event.channelId,
+                threadId: event.threadId ?? undefined,
+                limit: 200,
+            })
+
+            if (!fallbackMessages.length) {
+                await handler.sendMessage(
+                    event.channelId,
+                    "I haven't seen any messages in this channel yet. I'll start keeping track now!",
+                    threadOptions(event),
+                )
+                return
+            }
+
+            messages = fallbackMessages
+            summaryLabel = `latest ${messages.length} messages`
+            summaryStart = messages[0]!.createdAt
+            summaryEnd = messages[messages.length - 1]!.createdAt
+            fallbackNote = timeframe.label
         }
 
         try {
             const result = await summarizeConversation({
                 messages,
-                timeframeLabel: timeframe.label,
-                start: timeframe.start,
-                end: timeframe.end,
+                timeframeLabel: summaryLabel,
+                start: summaryStart,
+                end: summaryEnd,
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
             })
 
-            const footer = result.truncated
-                ? `_Analyzed ${result.usedMessages} messages (older messages truncated to stay within limits)._`
-                : `_Analyzed ${result.usedMessages} messages._`
+            const footerNotes: string[] = []
+            if (fallbackNote) {
+                footerNotes.push(`No activity detected in the past ${fallbackNote}. Summarized the most recent messages I have stored instead.`)
+            }
+            footerNotes.push(
+                result.truncated
+                    ? `Analyzed ${result.usedMessages} messages (older messages truncated to stay within limits).`
+                    : `Analyzed ${result.usedMessages} messages.`,
+            )
 
-            const response = [`**Summary (${timeframe.label})**`, '', result.summary, '', footer]
+            const footer = footerNotes.length ? `_${footerNotes.join(' ')}_` : undefined
+
+            const response = [`**Summary (${summaryLabel})**`, '', result.summary, '', footer]
                 .filter(Boolean)
                 .join('\n')
 
