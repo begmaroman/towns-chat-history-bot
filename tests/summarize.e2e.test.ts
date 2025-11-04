@@ -109,8 +109,8 @@ describe('summarize command', () => {
     })
 
     it('summarizes messages within the requested timeframe', async () => {
-        const mockFetchCalls: Array<{ url: string | URL; init?: RequestInit }> = []
-        globalThis.fetch = async (url, init) => {
+        const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
+        globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
             mockFetchCalls.push({ url, init })
             return new Response(
                 JSON.stringify({
@@ -118,7 +118,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }
+        }) as typeof fetch
 
         const mockBot = createMockBot()
         registerHelpHandler(mockBot.bot)
@@ -172,8 +172,8 @@ describe('summarize command', () => {
     })
 
     it('falls back to the most recent messages when timeframe is empty', async () => {
-        const mockFetchCalls: Array<{ url: string | URL; init?: RequestInit }> = []
-        globalThis.fetch = async (url, init) => {
+        const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
+        globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
             mockFetchCalls.push({ url, init })
             return new Response(
                 JSON.stringify({
@@ -181,7 +181,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }
+        }) as typeof fetch
 
         const mockBot = createMockBot()
         registerMessageHandler(mockBot.bot)
@@ -228,9 +228,9 @@ describe('summarize command', () => {
 
     it('reports when no messages have been observed yet', async () => {
         const mockFetch = globalThis.fetch
-        globalThis.fetch = async () => {
+        globalThis.fetch = ((async () => {
             throw new Error('Fetch should not be called when no messages are stored')
-        }
+        }) as unknown as typeof fetch)
 
         const mockBot = createMockBot()
         registerSummarizeHandler(mockBot.bot)
@@ -255,9 +255,86 @@ describe('summarize command', () => {
         globalThis.fetch = mockFetch
     })
 
+    it('guides the user when timeframe parsing fails', async () => {
+        const mockBot = createMockBot()
+        registerSummarizeHandler(mockBot.bot)
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['nonsense'],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-invalid',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        expect(sentMessages[0]?.message).toContain('Unable to understand timeframe')
+    })
+
+    it('notes fallback when a timeframe was requested but empty', async () => {
+        const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
+        globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+            mockFetchCalls.push({ url, init })
+            return new Response(
+                JSON.stringify({
+                    choices: [{ message: { content: 'Fallback with timeframe.' } }],
+                }),
+                { status: 200 },
+            )
+        }) as typeof fetch
+
+        const mockBot = createMockBot()
+        registerSummarizeHandler(mockBot.bot)
+        registerMessageHandler(mockBot.bot)
+
+        const messageHandler = mockBot.getMessageHandler()
+        const baseTime = Date.now() - 6 * 60 * 60 * 1000
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Old update outside timeframe.',
+            eventId: 'old-msg',
+            userId: USER_ID,
+            createdAt: new Date(baseTime),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['1h'],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-fallback',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        const [response] = sentMessages
+        expect(response?.message).toContain('latest 1 messages')
+        expect(response?.message).toContain('Fallback with timeframe.')
+        expect(response?.message).toContain('No activity detected in the past 1h')
+        expect(mockFetchCalls).toHaveLength(1)
+    })
+
     it('summarizes an entire thread when no duration is provided', async () => {
-        const mockFetchCalls: Array<{ url: string | URL; init?: RequestInit }> = []
-        globalThis.fetch = async (url, init) => {
+        const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
+        globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
             mockFetchCalls.push({ url, init })
             return new Response(
                 JSON.stringify({
@@ -265,7 +342,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }
+        }) as typeof fetch
 
         const mockBot = createMockBot()
         registerMessageHandler(mockBot.bot)
@@ -336,5 +413,48 @@ describe('summarize command', () => {
         expect(response?.message).toContain('Thread summary.')
         expect(response?.message).toContain('Analyzed 3 messages')
         expect(mockFetchCalls).toHaveLength(1)
+    })
+
+    it('surfaces OpenAI request failures gracefully', async () => {
+        globalThis.fetch = ((async () => {
+            throw new Error('Simulated OpenAI outage')
+        }) as unknown as typeof fetch)
+
+        const mockBot = createMockBot()
+        registerMessageHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot)
+
+        const messageHandler = mockBot.getMessageHandler()
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Message before failure.',
+            eventId: 'failure-msg',
+            userId: USER_ID,
+            createdAt: new Date(),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: [],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-fail',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        expect(sentMessages[0]?.message).toContain('Failed to generate summary')
+        expect(sentMessages[0]?.message).toContain('Simulated OpenAI outage')
     })
 })
