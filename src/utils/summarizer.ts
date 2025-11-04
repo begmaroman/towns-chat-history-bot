@@ -104,6 +104,7 @@ type Transcript = {
     text: string
     messageCount: number
     truncated: boolean
+    participants: string[]
 }
 
 function buildPrompt(params: PromptParams): string {
@@ -111,6 +112,10 @@ function buildPrompt(params: PromptParams): string {
     const scope = params.threadId ? `thread (${params.threadId})` : `channel (${params.channelId})`
     const truncationNote = params.transcript.truncated
         ? '\n\nNote: Older messages beyond the character budget were not included.'
+        : ''
+    const participantsNote = params.transcript.participants.length
+        ? '\n\nParticipants (full userIds for mentions):\n' +
+          params.transcript.participants.map((id) => `- <@${id}>`).join('\n')
         : ''
 
     return (
@@ -126,7 +131,8 @@ function buildPrompt(params: PromptParams): string {
         '\n\nIf the content is sparse, mention that explicitly.' +
         truncationNote +
         `\n\nMessages provided (${params.messageCount}):\n` +
-        params.transcript.text
+        params.transcript.text +
+        participantsNote
     )
 }
 
@@ -137,6 +143,7 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
     let usedCharacters = 0
     let truncated = false
     const lines: string[] = []
+    const participants = new Set<string>()
 
     for (const message of messages) {
         const line = formatMessageLine(message)
@@ -147,29 +154,24 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
         }
         lines.push(line)
         usedCharacters += lineLength
+        participants.add(message.userId)
     }
 
     return {
         text: lines.join('\n'),
         messageCount: lines.length,
         truncated,
+        participants: Array.from(participants),
     }
 }
 
 function formatMessageLine(message: PersistedMessage): string {
     const timestamp = message.createdAt.toISOString()
-    const author = shortenUserId(message.userId)
+    const author = message.userId
     const content = normaliseWhitespace(message.message)
     return `[${timestamp}] ${author}: ${content}`
 }
 
 function normaliseWhitespace(text: string): string {
     return text.replace(/\s+/g, ' ').trim()
-}
-
-function shortenUserId(userId: string): string {
-    if (!userId.startsWith('0x') || userId.length <= 10) {
-        return userId
-    }
-    return `${userId.slice(0, 6)}…${userId.slice(-4)}`
 }
