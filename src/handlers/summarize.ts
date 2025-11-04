@@ -112,7 +112,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
 
             const footer = footerNotes.length ? `_${footerNotes.join(' ')}_` : undefined
 
-            const response = [`**Summary (${summaryLabel})**`, '', result.summary, '', footer]
+            const response = [`**Summary (${summaryLabel})**`, '', result.summary, '\n\n', footer]
                 .filter(Boolean)
                 .join('\n')
 
