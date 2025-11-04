@@ -18,25 +18,10 @@ export function registerMessageHandler(bot: AppBot): void {
         }
 
         if (event.isMentioned) {
-            await handler.sendMessage(event.channelId, 'You mentioned me! 👀')
-            return
-        }
-
-        const message = event.message.toLowerCase()
-
-        if (message.includes('hello')) {
-            await handler.sendMessage(event.channelId, 'Hello there! 👋')
-            return
-        }
-
-        if (message.includes('ping')) {
-            const latency = Date.now() - event.createdAt.getTime()
-            await handler.sendMessage(event.channelId, `Pong! 🏓 ${latency}ms`)
-            return
-        }
-
-        if (message.includes('react')) {
-            await handler.sendReaction(event.channelId, event.eventId, '👍')
+            await handler.sendMessage(
+                event.channelId,
+                'Hi there! Use `/summarize [duration]` if you need a recap of recent activity.',
+            )
         }
     })
 }
