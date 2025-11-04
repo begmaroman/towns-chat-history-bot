@@ -117,9 +117,10 @@ function buildPrompt(params: PromptParams): string {
         `Summarize the following Towns conversation from ${timeRange} (${params.timeframeLabel}) in ${scope}.` +
         '\n\nInclude:' +
         '\n- Key themes and decisions' +
-        '\n- Action items with owners' +
+        '\n- Action items with owners (format owners as <@userId>)' +
         '\n- Open questions or follow-ups' +
         '\n- Sentiment or tone shifts if notable' +
+        '\n- Format every user reference as <@userId> instead of a plain address' +
         '\n\nIf the content is sparse, mention that explicitly.' +
         truncationNote +
         `\n\nMessages provided (${params.messageCount}):\n` +
