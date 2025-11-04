@@ -254,4 +254,87 @@ describe('summarize command', () => {
         expect(sentMessages[0]?.message).toContain("I haven't seen any messages in this channel yet")
         globalThis.fetch = mockFetch
     })
+
+    it('summarizes an entire thread when no duration is provided', async () => {
+        const mockFetchCalls: Array<{ url: string | URL; init?: RequestInit }> = []
+        globalThis.fetch = async (url, init) => {
+            mockFetchCalls.push({ url, init })
+            return new Response(
+                JSON.stringify({
+                    choices: [{ message: { content: 'Thread summary.' } }],
+                }),
+                { status: 200 },
+            )
+        }
+
+        const mockBot = createMockBot()
+        registerMessageHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot)
+
+        const messageHandler = mockBot.getMessageHandler()
+        const baseTime = Date.now()
+
+        // Root message
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Initial question?',
+            eventId: 'thread-root',
+            userId: USER_ID,
+            createdAt: new Date(baseTime - 60 * 60 * 1000),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+
+        // Thread replies
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'First reply with details.',
+            eventId: 'thread-msg-1',
+            userId: USER_ID,
+            createdAt: new Date(baseTime - 30 * 60 * 1000),
+            replyId: 'thread-root',
+            threadId: 'thread-root',
+            mentions: [],
+            isMentioned: false,
+        })
+
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Second reply adding context.',
+            eventId: 'thread-msg-2',
+            userId: USER_ID,
+            createdAt: new Date(baseTime - 10 * 60 * 1000),
+            replyId: 'thread-root',
+            threadId: 'thread-root',
+            mentions: [],
+            isMentioned: false,
+        })
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: [],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(baseTime),
+            eventId: 'slash-thread',
+            mentions: [],
+            replyId: undefined,
+            threadId: 'thread-root',
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        const [response] = sentMessages
+        expect(response?.message).toContain('**Summary (complete thread)**')
+        expect(response?.message).toContain('Thread summary.')
+        expect(response?.message).toContain('Analyzed 3 messages')
+        expect(mockFetchCalls).toHaveLength(1)
+    })
 })

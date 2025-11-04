@@ -8,8 +8,18 @@ const DEFAULT_TIMEFRAME = '24h'
 export function registerSummarizeHandler(bot: AppBot): void {
     bot.onSlashCommand('summarize', async (handler, event) => {
         const now = new Date()
-        const timeframeInput = event.args.join(' ').trim() || DEFAULT_TIMEFRAME
-        const timeframe = parseTimeframe(timeframeInput, now)
+        const isThread = Boolean(event.threadId)
+        const timeframeInput = event.args.join(' ').trim()
+
+        let timeframe = timeframeInput
+            ? parseTimeframe(timeframeInput, now)
+            : isThread
+              ? {
+                    start: new Date(0),
+                    end: now,
+                    label: 'complete thread',
+                }
+              : parseTimeframe(DEFAULT_TIMEFRAME, now)
 
         if (!timeframe) {
             await handler.sendMessage(
@@ -33,6 +43,19 @@ export function registerSummarizeHandler(bot: AppBot): void {
         let summaryEnd = timeframe.end
         let fallbackNote: string | undefined
 
+        if (!messages.length && isThread && !timeframeInput) {
+            messages = getMessages({
+                channelId: event.channelId,
+                threadId: event.threadId ?? undefined,
+                start: new Date(0),
+                end: now,
+                limit: 400,
+            })
+            summaryLabel = 'complete thread'
+            summaryStart = messages[0]?.createdAt ?? timeframe.start
+            summaryEnd = messages[messages.length - 1]?.createdAt ?? timeframe.end
+        }
+
         if (!messages.length) {
             const fallbackMessages = getRecentMessages({
                 channelId: event.channelId,
@@ -50,10 +73,14 @@ export function registerSummarizeHandler(bot: AppBot): void {
             }
 
             messages = fallbackMessages
-            summaryLabel = `latest ${messages.length} messages`
+            summaryLabel = isThread
+                ? `latest ${messages.length} thread messages`
+                : `latest ${messages.length} messages`
             summaryStart = messages[0]!.createdAt
             summaryEnd = messages[messages.length - 1]!.createdAt
-            fallbackNote = timeframe.label
+            if (!isThread || timeframeInput) {
+                fallbackNote = timeframe.label
+            }
         }
 
         try {
