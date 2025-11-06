@@ -40,6 +40,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
             threadOptions(event),
         )
 
+        // TODO: Deal with the max limit properly. Think about how to handle large threads or channels.
         let messages = getMessages({
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
