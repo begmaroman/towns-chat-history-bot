@@ -21,6 +21,34 @@ const NORMALISE_PATTERNS: Array<[RegExp, string]> = [
 
 const IGNORED_WORDS = ['last', 'past', 'for', 'the', 'in', 'over', 'about']
 
+const UNIT_VARIANTS: Record<string, string[]> = {
+    s: ['s', 'second', 'seconds'],
+    m: ['m', 'minute', 'minutes'],
+    h: ['h', 'hour', 'hours'],
+    d: ['d', 'day', 'days'],
+    w: ['w', 'week', 'weeks'],
+}
+
+const KNOWN_WORDS = new Set<string>([
+    ...IGNORED_WORDS,
+    ...Object.values(UNIT_VARIANTS).flatMap((variants) => variants),
+])
+
+const TIMEFRAME_USAGE_HELP =
+    'Supported timeframe units: `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks). Combine numbers with these units like `30m`, `2h`, `1d`, `1w`, or phrases such as `last 3 hours`.'
+
+export { TIMEFRAME_USAGE_HELP }
+
+export function findUnknownTimeframeWords(input?: string): string[] {
+    if (!input) {
+        return []
+    }
+
+    const words = input.toLowerCase().match(/[a-z]+/g) ?? []
+    const unknown = words.filter((word) => !KNOWN_WORDS.has(word))
+    return Array.from(new Set(unknown))
+}
+
 export function parseTimeframe(input?: string, now = new Date()): ParsedTimeframe | null {
     const label = input?.trim() ?? ''
     const cleanedInput = normaliseInput(label)

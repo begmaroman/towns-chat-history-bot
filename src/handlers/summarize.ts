@@ -1,6 +1,6 @@
 import type { AppBot } from '../types'
 import { getMessages, getRecentMessages } from '../storage/messageStore'
-import { parseTimeframe } from '../utils/timeframe'
+import { TIMEFRAME_USAGE_HELP, findUnknownTimeframeWords, parseTimeframe } from '../utils/timeframe'
 import { summarizeConversation } from '../utils/summarizer'
 import { ensureMessagesForRange } from '../utils/historyBackfill'
 
@@ -10,12 +10,16 @@ export function registerSummarizeHandler(bot: AppBot): void {
         const isThread = Boolean(event.threadId)
         const timeframeInput = event.args.join(' ').trim()
 
+        const unknownWords = timeframeInput ? findUnknownTimeframeWords(timeframeInput) : []
         let timeframe = timeframeInput ? parseTimeframe(timeframeInput, now) : undefined
 
         if (!timeframe && timeframeInput) {
+            const prefix = unknownWords.length
+                ? `I don't recognize ${formatWordList(unknownWords)} in that timeframe request.`
+                : 'Unable to understand timeframe.'
             await handler.sendMessage(
                 event.channelId,
-                'Unable to understand timeframe. Try formats like `12h`, `2d`, `1w`, or phrases such as `last 3 hours`.',
+                `${prefix} ${TIMEFRAME_USAGE_HELP}`,
                 threadOptions(event),
             )
             return
@@ -152,4 +156,19 @@ function threadOptions(event: { threadId?: string | undefined; eventId: string }
     return {
         threadId: event.threadId ?? event.eventId,
     }
+}
+
+function formatWordList(words: string[]): string {
+    if (words.length === 1) {
+        return `"${words[0]}"`
+    }
+    if (words.length === 2) {
+        return `"${words[0]}" and "${words[1]}"`
+    }
+    const last = words[words.length - 1]
+    const initial = words
+        .slice(0, -1)
+        .map((word) => `"${word}"`)
+        .join(', ')
+    return `${initial}, and "${last}"`
 }

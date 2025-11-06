@@ -440,7 +440,9 @@ describe('summarize command', () => {
         })
 
         expect(sentMessages).toHaveLength(1)
-        expect(sentMessages[0]?.message).toContain('Unable to understand timeframe')
+        const message = sentMessages[0]?.message ?? ''
+        expect(message).toContain('I don\'t recognize "nonsense"')
+        expect(message).toContain('Supported timeframe units')
     })
 
     it('notes fallback when a timeframe was requested but empty', async () => {
