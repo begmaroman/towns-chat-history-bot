@@ -36,7 +36,10 @@ export async function ensureMessagesForRange(bot: AppBot, channelId: string, sta
         try {
             const events = await loadEvents(bot, channelId, start)
             const messages = await transformEvents(bot, channelId, events)
-            saveMessages(channelId, messages)
+            const filtered = messages.filter((message) => message.userId !== bot.botId)
+            if (filtered.length) {
+                saveMessages(channelId, filtered)
+            }
         } catch (error) {
             console.warn('history backfill skipped', { channelId, error })
         }
