@@ -1,6 +1,4 @@
-import {fromJsonString, fromBinary} from '@bufbuild/protobuf'
 import {makeTownsBot} from '@towns-protocol/bot'
-import {bin_toString} from '@towns-protocol/utils'
 import {Hono} from 'hono'
 import {logger} from 'hono/logger'
 import commands from './commands'
@@ -9,10 +7,8 @@ import {registerMessageHandler} from './handlers/message'
 import {registerMessageEditHandler} from './handlers/messageEdit'
 import {registerRedactionHandler} from './handlers/redaction'
 import {registerSummarizeHandler} from './handlers/summarize'
-import {ChannelMessage, ChannelMessageSchema} from '@towns-protocol/proto'
 import {loadEventsSince} from './utils/miniblockLoader'
-import {decryptStreamEvent, getEncryptedEventContent} from './utils/streamDecryption'
-import type {PersistedMessage} from './storage/messageStore'
+import {transformEventsToPersistedMessages, transformEventToPersistedMessage} from './utils/eventTransform'
 
 const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SECRET!, {
     commands,
@@ -41,52 +37,7 @@ async function dumpStreamMessages(streamIdHex: string) {
 
     const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000)
     const events = await loadEventsSince(bot, streamIdHex, twelveHoursAgo)
+    const messages = await transformEventsToPersistedMessages(bot, streamIdHex, events)
 
-    for (const parsed of events) {
-        const cleartext = await decryptStreamEvent(bot, streamIdHex, parsed)
-        if (!cleartext) {
-            continue
-        }
-
-        const timestampMs = typeof parsed.event.createdAtEpochMs === 'bigint'
-            ? Number(parsed.event.createdAtEpochMs)
-            : parsed.event.createdAtEpochMs
-        const parsedMessage = parseChannelMessage(cleartext)
-        const threadId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.threadId : undefined
-        const replyId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.replyId : undefined
-        const content = formatCleartext(cleartext, parsedMessage)
-
-        const stored: PersistedMessage = {
-            eventId: parsed.hashStr,
-            channelId: streamIdHex,
-            threadId,
-            replyId,
-            userId: parsed.creatorUserId,
-            message: content,
-            createdAt: new Date(timestampMs),
-        }
-
-        console.log(stored)
-    }
-}
-
-function formatCleartext(cleartext: string | Uint8Array, parsed?: ReturnType<typeof parseChannelMessage>): string {
-    if (parsed?.payload.case === 'post' && parsed.payload.value.content.case === 'text') {
-        return parsed.payload.value.content.value.body
-    }
-    return typeof cleartext === 'string' ? cleartext : bin_toString(cleartext)
-}
-
-function parseChannelMessage(cleartext: string | Uint8Array) {
-    let channelMessage: ChannelMessage
-    if (typeof cleartext === 'string') {
-        channelMessage = fromJsonString(
-          ChannelMessageSchema,
-          cleartext,
-        )
-    } else {
-        channelMessage = fromBinary(ChannelMessageSchema, cleartext)
-    }
-
-    return channelMessage
+    console.log(messages)
 }
