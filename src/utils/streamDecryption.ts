@@ -15,7 +15,7 @@ export async function decryptStreamEvent(
     streamIdHex: string,
     event: ParsedEvent,
 ): Promise<string | Uint8Array | undefined> {
-    const encryptedContent = extractEncryptedContent(event)
+    const encryptedContent = getEncryptedEventContent(event)
     if (!encryptedContent) {
         return undefined
     }
@@ -24,7 +24,7 @@ export async function decryptStreamEvent(
     return bot.client.crypto.decryptGroupEvent(streamIdHex, encryptedContent)
 }
 
-function extractEncryptedContent(event: ParsedEvent): EncryptedData | undefined {
+export function getEncryptedEventContent(event: ParsedEvent): EncryptedData | undefined {
     const payload = event.event.payload
     switch (payload.case) {
         case 'channelPayload':

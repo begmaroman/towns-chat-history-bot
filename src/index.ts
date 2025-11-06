@@ -1,3 +1,4 @@
+import { fromJsonString } from '@bufbuild/protobuf'
 import { makeTownsBot } from '@towns-protocol/bot'
 import { bin_toString } from '@towns-protocol/utils'
 import { Hono } from 'hono'
@@ -8,17 +9,15 @@ import { registerMessageHandler } from './handlers/message'
 import { registerMessageEditHandler } from './handlers/messageEdit'
 import { registerRedactionHandler } from './handlers/redaction'
 import { registerSummarizeHandler } from './handlers/summarize'
+import { ChannelMessageSchema } from '@towns-protocol/proto'
 import { loadEventsSince } from './utils/miniblockLoader'
-import { decryptStreamEvent } from './utils/streamDecryption'
+import { decryptStreamEvent, getEncryptedEventContent } from './utils/streamDecryption'
 
 const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SECRET!, {
     commands,
 })
 
-const debugStreamId = "20e38d1437e1b91bf6b6bc21d6a97b7a7a91ec763f9626e654657bbebec3eecb"
-if (debugStreamId) {
-    await dumpStreamMessages(debugStreamId)
-}
+await dumpStreamMessages("20e38d1437e1b91bf6b6bc21d6a97b7a7a91ec763f9626e654657bbebec3eecb")
 
 registerHelpHandler(bot)
 registerSummarizeHandler(bot)
@@ -48,11 +47,36 @@ async function dumpStreamMessages(streamIdHex: string) {
             continue
         }
 
+        const encryptedContent = getEncryptedEventContent(parsed)
+        const replyId = encryptedContent?.refEventId
         const timestampMs = typeof parsed.event.createdAtEpochMs === 'bigint'
             ? Number(parsed.event.createdAtEpochMs)
             : parsed.event.createdAtEpochMs
         const timestampIso = new Date(timestampMs).toISOString()
-        const content = typeof cleartext === 'string' ? cleartext : bin_toString(cleartext)
-        console.log(`[${timestampIso}] ${content}`)
+        const parsedMessage = parseChannelMessage(cleartext)
+        const content = formatCleartext(cleartext, parsedMessage)
+        const replyNote = replyId ? ` (reply to ${replyId})` : ''
+        console.log(`[${timestampIso}]${replyNote} ${content}`)
+    }
+}
+
+function formatCleartext(cleartext: string | Uint8Array, parsed?: ReturnType<typeof parseChannelMessage>): string {
+    if (parsed?.payload.case === 'post' && parsed.payload.value.content.case === 'text') {
+        return parsed.payload.value.content.value.body
+    }
+    return typeof cleartext === 'string' ? cleartext : bin_toString(cleartext)
+}
+
+function parseChannelMessage(cleartext: string | Uint8Array) {
+    const json = typeof cleartext === 'string' ? cleartext : bin_toString(cleartext)
+    const firstChar = json.trimStart().at(0)
+    if (firstChar !== '{') {
+        return undefined
+    }
+    try {
+        return fromJsonString(ChannelMessageSchema, json)
+    } catch (error) {
+        console.warn('Failed to parse channel message cleartext', error)
+        return undefined
     }
 }
