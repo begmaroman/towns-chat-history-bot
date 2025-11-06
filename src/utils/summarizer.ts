@@ -30,7 +30,6 @@ Instructions:
 
 Respond using this exact template (do not add or remove sections):
 
-Summary ({{timeframeLabel}})
 Key Themes:
 - ...
 Action Items:
