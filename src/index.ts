@@ -48,35 +48,26 @@ async function dumpStreamMessages(streamIdHex: string) {
             continue
         }
 
-        const encryptedContent = getEncryptedEventContent(parsed)
-        const replyFromEnvelope = encryptedContent?.refEventId
         const timestampMs = typeof parsed.event.createdAtEpochMs === 'bigint'
             ? Number(parsed.event.createdAtEpochMs)
             : parsed.event.createdAtEpochMs
-        const timestampIso = new Date(timestampMs).toISOString()
         const parsedMessage = parseChannelMessage(cleartext)
         const threadId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.threadId : undefined
         const inlineReplyId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.replyId : undefined
-        const isThreadReply = Boolean(threadId)
-        const isInlineReply = !isThreadReply && Boolean(inlineReplyId || replyFromEnvelope)
         const content = formatCleartext(cleartext, parsedMessage)
-        const replyTargetId =
-            replyFromEnvelope ??
-            (isThreadReply ? threadId : undefined) ??
-            inlineReplyId
+        const replyTargetId = threadId ?? inlineReplyId
 
         const stored: PersistedMessage = {
             eventId: parsed.hashStr,
             channelId: streamIdHex,
-            threadId: isThreadReply ? threadId : undefined,
-            replyId: isInlineReply ? replyTargetId : undefined,
+            threadId: threadId,
+            replyId:replyTargetId,
             userId: parsed.creatorUserId,
             message: content,
             createdAt: new Date(timestampMs),
         }
 
-        const replyContext = isThreadReply ? 'thread reply' : isInlineReply ? 'inline reply' : undefined
-        console.log(`[${timestampIso}]${replyContext && replyTargetId ? ` (${replyContext} → ${replyTargetId})` : ''}`, stored)
+        console.log(stored)
     }
 }
 
