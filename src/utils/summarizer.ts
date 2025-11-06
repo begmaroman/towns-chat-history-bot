@@ -36,7 +36,6 @@ Action Items:
 - <@userId> — ...
 Open Questions:
 - ...
-Analyzed {{messageCount}} messages.
 
 Transcript (JSON array for reference):
 {{transcript}}
@@ -135,7 +134,7 @@ function buildPrompt(params: PromptParams): string {
         : ''
     const participantsNote = params.transcript.participants.length
         ? '\n\nParticipants (full userIds for mentions):\n' +
-          params.transcript.participants.map((id) => `- <@${id}>`).join('\n')
+          params.transcript.participants.map((id) => `- ${id}`).join('\n')
         : ''
 
     return renderTemplate(SUMMARY_PROMPT_TEMPLATE, {
