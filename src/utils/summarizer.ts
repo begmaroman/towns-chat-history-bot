@@ -21,21 +21,28 @@ const OPENAI_ENDPOINT = process.env.OPENAI_API_ENDPOINT ?? 'https://api.openai.c
 
 const SUMMARY_PROMPT_TEMPLATE = `Summarize the following Towns conversation starting from {{startIso}} ({{timeframeLabel}}) in {{scope}}.
 
-Include:
-- No general title required
-- Key themes and decisions
-- Action items with owners (format owners as <@userId>)
-- Open questions or follow-ups
-- Format every user reference as <@userId> instead of a plain address
-- Use the complete userId when constructing <@userId> mentions; do not shorten or truncate
-- Map author field in the message object to participant and use a full identifier
+Instructions:
+- Keep tone neutral and professional.
+- Format every user reference as <@userId> using the exact identifier provided.
+- Use the complete userId when constructing <@userId> mentions; do not shorten or truncate.
+- Treat the transcript as authoritative; do not invent details.
+- If the content is sparse, state that explicitly.
 
-If the content is sparse, mention that explicitly.
-{{truncationNote}}
+Respond using this exact template (do not add or remove sections):
 
-Messages provided ({{messageCount}}):
+Summary ({{timeframeLabel}})
+Key Themes:
+- ...
+Action Items:
+- <@userId> — ...
+Open Questions:
+- ...
+Analyzed {{messageCount}} messages.
+
+Transcript (JSON array for reference):
 {{transcript}}
-{{participantsNote}}`
+{{participantsNote}}
+{{truncationNote}}`
 
 export async function summarizeConversation(params: SummarizeParams): Promise<SummarizeResult> {
     const apiKey = process.env.OPENAI_API_KEY
