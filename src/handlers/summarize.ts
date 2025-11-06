@@ -86,7 +86,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
             summaryLabel = isThread
                 ? `latest ${messages.length} thread messages`
                 : `latest ${messages.length} messages`
-            summaryStart = messages[0]!.createdAt
+            summaryStart = messages[0]?.createdAt ?? summaryStart
             fallbackNote = timeframe.label
         }
 

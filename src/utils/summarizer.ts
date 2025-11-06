@@ -73,7 +73,8 @@ export async function summarizeConversation(params: SummarizeParams): Promise<Su
         messages: [
             {
                 role: 'system',
-                content: 'You are an expert meeting summarizer. Write concise, structured summaries that highlight decisions, action items with owners, unresolved questions, sentiment (if relevant), and important context (if relevant). Keep tone neutral and professional.',
+                content:
+                    'You are an expert meeting summarizer. Write concise, structured summaries that highlight decisions, action items with owners, unresolved questions, sentiment (if relevant), and important context (if relevant). Keep tone neutral and professional.',
             },
             {
                 role: 'user',
@@ -159,13 +160,13 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
 
     for (const message of messages) {
         const entry = buildMessageEntry(message)
-        committedEntries.push(entry)
-        const projectedText = JSON.stringify(committedEntries, null, 2)
+        const projectedEntries = [...committedEntries, entry]
+        const projectedText = JSON.stringify(projectedEntries)
         if (projectedText.length > characterBudget) {
-            committedEntries.pop()
             truncated = true
             break
         }
+        committedEntries.push(entry)
         participants.add(message.userId)
     }
 
@@ -197,7 +198,7 @@ function buildMessageEntry(message: PersistedMessage): Record<string, unknown> {
     return entry
 }
 
-function buildReplyMetadata(message: PersistedMessage,): { thread?: string; message?: string } | undefined {
+function buildReplyMetadata(message: PersistedMessage): { thread?: string; message?: string } | undefined {
     const { threadId, replyId } = message
     if (!threadId && !replyId) {
         return undefined
@@ -219,23 +220,13 @@ function buildReplyMetadata(message: PersistedMessage,): { thread?: string; mess
     return Object.keys(metadata).length ? metadata : undefined
 }
 
-function shortenId(id: string, length = 8): string {
-    if (!id) {
-        return id
-    }
-    const clean = id.startsWith('0x') ? id : `0x${id}`
-    if (clean.length <= length + 2) {
-        return clean
-    }
-    const prefix = clean.slice(0, Math.ceil((length - 1) / 2))
-    const suffix = clean.slice(-Math.floor((length - 1) / 2))
-    return `${prefix}…${suffix}`
-}
-
 function normaliseWhitespace(text: string): string {
     return text.replace(/\s+/g, ' ').trim()
 }
 
 function renderTemplate(template: string, values: Record<string, string>): string {
-    return template.replace(/{{(\w+)}}/g, (_, key) => values[key] ?? '')
+    return template.replace(/{{(\w+)}}/g, (_, rawKey) => {
+        const key = rawKey as keyof typeof values
+        return values[key] ?? ''
+    })
 }
