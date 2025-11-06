@@ -1,6 +1,6 @@
 import {fromJsonString, fromBinary} from '@bufbuild/protobuf'
 import {makeTownsBot} from '@towns-protocol/bot'
-import {bin_toHexString, bin_toString} from '@towns-protocol/utils'
+import {bin_toString} from '@towns-protocol/utils'
 import {Hono} from 'hono'
 import {logger} from 'hono/logger'
 import commands from './commands'
@@ -9,7 +9,7 @@ import {registerMessageHandler} from './handlers/message'
 import {registerMessageEditHandler} from './handlers/messageEdit'
 import {registerRedactionHandler} from './handlers/redaction'
 import {registerSummarizeHandler} from './handlers/summarize'
-import {ChannelMessage, ChannelMessageSchema, MessageInteractionType} from '@towns-protocol/proto'
+import {ChannelMessage, ChannelMessageSchema} from '@towns-protocol/proto'
 import {loadEventsSince} from './utils/miniblockLoader'
 import {decryptStreamEvent, getEncryptedEventContent} from './utils/streamDecryption'
 import type {PersistedMessage} from './storage/messageStore'
@@ -48,12 +48,6 @@ async function dumpStreamMessages(streamIdHex: string) {
             continue
         }
 
-        const tags = parsed.event.tags
-        const interactionType = tags?.messageInteractionType
-        const threadIdFromTags = tags?.threadId ? bin_toHexString(tags.threadId) : undefined
-        const isReply = interactionType === MessageInteractionType.REPLY
-        const isThreadReply = Boolean(threadIdFromTags)
-
         const encryptedContent = getEncryptedEventContent(parsed)
         const replyFromEnvelope = encryptedContent?.refEventId
         const timestampMs = typeof parsed.event.createdAtEpochMs === 'bigint'
@@ -61,39 +55,27 @@ async function dumpStreamMessages(streamIdHex: string) {
             : parsed.event.createdAtEpochMs
         const timestampIso = new Date(timestampMs).toISOString()
         const parsedMessage = parseChannelMessage(cleartext)
-        const threadIdFromPayload = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.threadId : undefined
+        const threadId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.threadId : undefined
         const inlineReplyId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.replyId : undefined
-        const threadId = threadIdFromTags ?? threadIdFromPayload
+        const isThreadReply = Boolean(threadId)
+        const isInlineReply = !isThreadReply && Boolean(inlineReplyId || replyFromEnvelope)
         const content = formatCleartext(cleartext, parsedMessage)
         const replyTargetId =
             replyFromEnvelope ??
             (isThreadReply ? threadId : undefined) ??
             inlineReplyId
 
-        let storedThreadId = threadId
-        let storedReplyId = replyTargetId
-
-        if (isReply) {
-            if (isThreadReply) {
-                storedReplyId = undefined
-                storedThreadId = threadId
-            } else {
-                storedReplyId = replyTargetId
-                storedThreadId = undefined
-            }
-        }
-
         const stored: PersistedMessage = {
             eventId: parsed.hashStr,
             channelId: streamIdHex,
-            threadId: storedThreadId,
-            replyId: storedReplyId,
+            threadId: isThreadReply ? threadId : undefined,
+            replyId: isInlineReply ? replyTargetId : undefined,
             userId: parsed.creatorUserId,
             message: content,
             createdAt: new Date(timestampMs),
         }
 
-        const replyContext = isReply ? (isThreadReply ? 'thread reply' : 'inline reply') : undefined
+        const replyContext = isThreadReply ? 'thread reply' : isInlineReply ? 'inline reply' : undefined
         console.log(`[${timestampIso}]${replyContext && replyTargetId ? ` (${replyContext} → ${replyTargetId})` : ''}`, stored)
     }
 }
