@@ -13,22 +13,25 @@ export function registerSummarizeHandler(bot: AppBot): void {
 
         let timeframe = timeframeInput ? parseTimeframe(timeframeInput, now) : undefined
 
-        if (!timeframe) {
-            timeframe = isThread
-                ? {
-                      start: new Date(0),
-                      label: 'complete thread',
-                  }
-                : parseTimeframe(DEFAULT_TIMEFRAME, now) ?? undefined
-        }
-
-        if (!timeframe) {
+        if (!timeframe && timeframeInput) {
             await handler.sendMessage(
                 event.channelId,
                 'Unable to understand timeframe. Try formats like `12h`, `2d`, `1w`, or phrases such as `last 3 hours`.',
                 threadOptions(event),
             )
             return
+        }
+
+        if (!timeframe) {
+            timeframe = isThread
+                ? {
+                      start: new Date(0),
+                      label: 'complete thread',
+                  }
+                : {
+                      start: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+                      label: '24 hours',
+                  }
         }
 
         const pending = await handler.sendMessage(
