@@ -1,10 +1,10 @@
-# Towns Chat History Bot
+# Towns Chronicle Bot
 
 Instant conversation recaps for busy Towns spaces.
 
 ## Overview
 
-Towns Chat History Bot listens in any channel or thread you invite it to, then delivers on-demand summaries via `/summarize`. Each report highlights decisions, action items, and open questions so teams can align quickly without rereading entire conversations.
+Towns Chronicle Bot listens in any channel or thread you invite it to, then delivers on-demand summaries via `/summarize`. Each report highlights decisions, action items, and open questions so teams can align quickly without rereading entire conversations.
 
 ## Features
 
