@@ -66,3 +66,7 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 - Run on an always-on host so the in-memory cache stays warm between summaries.
 - Secure the webhook endpoint behind HTTPS and ensure Towns can reach the exposed URL.
 - Monitor OpenAI usage to stay within rate limits and quotas.
+
+## TODO: 
+- Improve hard messages limits
+- Update timeframe if there are too many messages and inform user about it
