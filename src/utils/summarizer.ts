@@ -132,7 +132,7 @@ function buildPrompt(params: PromptParams): string {
     )
 }
 
-const DEFAULT_CHAR_LIMIT = 12_000
+const DEFAULT_CHAR_LIMIT = 20_000
 
 function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): Transcript {
     const characterBudget = maxCharacters ?? DEFAULT_CHAR_LIMIT
