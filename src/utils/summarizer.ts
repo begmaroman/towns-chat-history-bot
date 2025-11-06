@@ -65,7 +65,7 @@ export async function summarizeConversation(params: SummarizeParams): Promise<Su
         threadId: params.threadId,
         messageCount: transcript.messageCount,
     })
-    console.log(prompt)
+
     const body = {
         model: params.model ?? DEFAULT_MODEL,
         temperature: 0.2,
