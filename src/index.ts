@@ -53,15 +53,14 @@ async function dumpStreamMessages(streamIdHex: string) {
             : parsed.event.createdAtEpochMs
         const parsedMessage = parseChannelMessage(cleartext)
         const threadId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.threadId : undefined
-        const inlineReplyId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.replyId : undefined
+        const replyId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.replyId : undefined
         const content = formatCleartext(cleartext, parsedMessage)
-        const replyTargetId = threadId ?? inlineReplyId
 
         const stored: PersistedMessage = {
             eventId: parsed.hashStr,
             channelId: streamIdHex,
-            threadId: threadId,
-            replyId:replyTargetId,
+            threadId,
+            replyId,
             userId: parsed.creatorUserId,
             message: content,
             createdAt: new Date(timestampMs),
