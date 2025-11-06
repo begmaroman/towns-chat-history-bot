@@ -59,7 +59,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
             start: rangeStart,
-            limit: 400,
+            limit: 400, // TODO: Deal with the limit in a more flexible way
         })
 
         let summaryLabel = timeframe.label
