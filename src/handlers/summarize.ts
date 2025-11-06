@@ -40,12 +40,10 @@ export function registerSummarizeHandler(bot: AppBot): void {
             threadOptions(event),
         )
 
-        const rangeStart = timeframe.start
-
         let messages = getMessages({
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
-            start: rangeStart,
+            start: timeframe.start,
             limit: 400,
         })
 
