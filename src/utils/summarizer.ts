@@ -28,7 +28,7 @@ Instructions:
 - Treat the transcript as authoritative; do not invent details.
 - If the content is sparse, state that explicitly.
 
-Respond using this exact template (do not add or remove sections) defined between the triple backticks:
+Respond using this exact template (do not add or remove sections) defined between the triple backticks (send summary without triple backticks):
 
 \`\`\`
 Key Themes:
