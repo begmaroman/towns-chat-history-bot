@@ -52,27 +52,26 @@ export async function summarizeConversation(params: SummarizeParams): Promise<Su
     }
 
     const transcript = buildTranscript(params.messages, params.maxCharacters)
-
-
+    const prompt = buildPrompt({
+        transcript,
+        start: params.start,
+        timeframeLabel: params.timeframeLabel,
+        channelId: params.channelId,
+        threadId: params.threadId,
+        messageCount: transcript.messageCount,
+    })
+    console.log(prompt)
     const body = {
         model: params.model ?? DEFAULT_MODEL,
         temperature: 0.2,
         messages: [
             {
                 role: 'system',
-                content:
-                    'You are an expert meeting summarizer. Write concise, structured summaries that highlight decisions, action items with owners, unresolved questions, sentiment, and important context. Keep tone neutral and professional.',
+                content: 'You are an expert meeting summarizer. Write concise, structured summaries that highlight decisions, action items with owners, unresolved questions, sentiment, and important context. Keep tone neutral and professional.',
             },
             {
                 role: 'user',
-                content: buildPrompt({
-                    transcript,
-                    start: params.start,
-                    timeframeLabel: params.timeframeLabel,
-                    channelId: params.channelId,
-                    threadId: params.threadId,
-                    messageCount: transcript.messageCount,
-                }),
+                content: prompt,
             },
         ],
     }
@@ -165,7 +164,7 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
     }
 
     return {
-        text: JSON.stringify(committedEntries, null, 2),
+        text: JSON.stringify(committedEntries),
         messageCount: committedEntries.length,
         truncated,
         participants: Array.from(participants),
