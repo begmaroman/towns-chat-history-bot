@@ -223,8 +223,3 @@ function shortenId(id: string, length = 8): string {
 function normaliseWhitespace(text: string): string {
     return text.replace(/\s+/g, ' ').trim()
 }
-
-function makeLabel(index: number): string {
-    const base = String(index).padStart(3, '0')
-    return `m${base}`
-}
