@@ -72,7 +72,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
                 start: new Date(0),
-                limit: 400,
+                limit: 400, // TODO: Deal with the limit in a more flexible way
             })
             summaryLabel = 'complete thread'
             summaryStart = messages[0]?.createdAt ?? rangeStart
@@ -82,7 +82,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
             const fallbackMessages = getRecentMessages({
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
-                limit: 200,
+                limit: 400, // TODO: Deal with the limit in a more flexible way
             })
 
             if (!fallbackMessages.length) {
