@@ -128,8 +128,8 @@ export function registerSummarizeHandler(bot: AppBot): void {
             }
             footerNotes.push(
                 result.truncated
-                    ? `Analyzed ${result.usedMessages} messages (older messages truncated to stay within limits).`
-                    : `Analyzed ${result.usedMessages} messages.`,
+                    ? `Analyzed ${result.usedMessages} message(s) (older messages truncated to stay within limits).`
+                    : `Analyzed ${result.usedMessages} message(s).`,
             )
 
             const footer = footerNotes.length ? `_${footerNotes.join(' ')}_` : undefined
