@@ -116,6 +116,7 @@ function buildPrompt(params: PromptParams): string {
           params.transcript.participants.map((id) => `- <@${id}>`).join('\n')
         : ''
 
+    // TODO: Create a summary message template
     return (
         `Summarize the following Towns conversation starting from ${params.start.toISOString()} (${params.timeframeLabel}) in ${scope}.` +
         '\n\nInclude:' +
