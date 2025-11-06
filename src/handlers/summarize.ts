@@ -2,8 +2,7 @@ import type { AppBot } from '../types'
 import { getMessages, getRecentMessages } from '../storage/messageStore'
 import { parseTimeframe } from '../utils/timeframe'
 import { summarizeConversation } from '../utils/summarizer'
-
-const DEFAULT_TIMEFRAME = '24h'
+import { ensureMessagesForRange } from '../utils/historyBackfill'
 
 export function registerSummarizeHandler(bot: AppBot): void {
     bot.onSlashCommand('summarize', async (handler, event) => {
@@ -40,19 +39,22 @@ export function registerSummarizeHandler(bot: AppBot): void {
             threadOptions(event),
         )
 
-        // TODO: Deal with the max limit properly. Think about how to handle large threads or channels.
+        const rangeStart = timeframe.start
+        await ensureMessagesForRange(bot, event.channelId, rangeStart)
+
         let messages = getMessages({
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
-            start: timeframe.start,
+            start: rangeStart,
             limit: 400,
         })
 
         let summaryLabel = timeframe.label
-        let summaryStart = timeframe.start
+        let summaryStart = rangeStart
         let fallbackNote: string | undefined
 
         if (!messages.length && isThread && !timeframeInput) {
+            await ensureMessagesForRange(bot, event.channelId, new Date(0))
             messages = getMessages({
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
@@ -60,17 +62,32 @@ export function registerSummarizeHandler(bot: AppBot): void {
                 limit: 400,
             })
             summaryLabel = 'complete thread'
-            summaryStart = messages[0]?.createdAt ?? timeframe.start
+            summaryStart = messages[0]?.createdAt ?? rangeStart
         }
 
         if (!messages.length) {
-            await handler.editMessage(
-              event.channelId,
-              pending.eventId,
-              "I haven't seen any messages in this channel yet. I'll start keeping track now!",
-              threadOptions(event),
-            )
-            return
+            const fallbackMessages = getRecentMessages({
+                channelId: event.channelId,
+                threadId: event.threadId ?? undefined,
+                limit: 200,
+            })
+
+            if (!fallbackMessages.length) {
+                await handler.editMessage(
+                    event.channelId,
+                    pending.eventId,
+                    "I haven't seen any messages in this channel yet. I'll start keeping track now!",
+                    threadOptions(event),
+                )
+                return
+            }
+
+            messages = fallbackMessages
+            summaryLabel = isThread
+                ? `latest ${messages.length} thread messages`
+                : `latest ${messages.length} messages`
+            summaryStart = messages[0]!.createdAt
+            fallbackNote = timeframe.label
         }
 
         try {

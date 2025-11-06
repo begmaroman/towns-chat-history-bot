@@ -10,14 +10,16 @@ import { registerMessageEditHandler } from '../src/handlers/messageEdit'
 import { registerRedactionHandler } from '../src/handlers/redaction'
 import { registerSummarizeHandler } from '../src/handlers/summarize'
 import { clearMessages } from '../src/storage/messageStore'
+import { __setHistoryBackfillHooks } from '../src/utils/historyBackfill'
 
 type SlashCommandHandler = Parameters<AppBot['onSlashCommand']>[1]
 type MessageHandler = Parameters<AppBot['onMessage']>[0]
 
-const CHANNEL_ID = 'channel-1'
+const CHANNEL_ID = '20e38d1437e1b91bf6b6bc21d6a97b7a'
 const SPACE_ID = 'space-1'
 const BOT_ID: `0x${string}` = '0xb07b07b07b07b07b07b07b07b07b07b07b07b07'
 const USER_ID: `0x${string}` = '0x1230000000000000000000000000000000000000'
+const HEX_CHANNEL_ID = CHANNEL_ID
 
 type RecordedMessage = {
     channelId: string
@@ -120,6 +122,10 @@ describe('summarize command', () => {
     beforeEach(() => {
         clearMessages()
         process.env.OPENAI_API_KEY = 'test-api-key'
+        __setHistoryBackfillHooks({
+            loadEventsSince: async () => [],
+            transformEventsToPersistedMessages: async () => [],
+        })
     })
 
     afterEach(() => {
@@ -128,6 +134,7 @@ describe('summarize command', () => {
             globalThis.fetch = ORIGINAL_FETCH
         }
         delete process.env.OPENAI_API_KEY
+        __setHistoryBackfillHooks()
     })
 
     it('summarizes messages within the requested timeframe', async () => {
@@ -191,6 +198,142 @@ describe('summarize command', () => {
         expect(mockFetchCalls).toHaveLength(1)
         const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
         expect(body.messages[1].content).toContain('Discussed release plan.')
+    })
+
+    it('backfills historical messages for hex channel IDs when cache is empty', async () => {
+        const loadCalls: Array<{ streamId: string; start: number }> = []
+        const historicalCreatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000)
+
+        __setHistoryBackfillHooks({
+            loadEventsSince: async (_bot, streamId, start) => {
+                loadCalls.push({ streamId, start: start.getTime() })
+                return []
+            },
+            transformEventsToPersistedMessages: async (_bot, streamId) => {
+                return [
+                    {
+                        eventId: 'backfill-1',
+                        channelId: streamId,
+                        threadId: undefined,
+                        replyId: undefined,
+                        userId: USER_ID,
+                        message: 'Historical update from archive.',
+                        createdAt: historicalCreatedAt,
+                    },
+                ]
+            },
+        })
+
+        const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
+        globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+            mockFetchCalls.push({ url, init })
+            return new Response(
+                JSON.stringify({
+                    choices: [{ message: { content: 'Summary using backfilled context.' } }],
+                }),
+                { status: 200 },
+            )
+        }) as typeof fetch
+
+        const mockBot = createMockBot()
+        registerSummarizeHandler(mockBot.bot)
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['2h'],
+            userId: USER_ID,
+            channelId: HEX_CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-backfill',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(loadCalls).toHaveLength(1)
+        expect(loadCalls[0]?.streamId).toBe(HEX_CHANNEL_ID)
+        expect(sentMessages).toHaveLength(1)
+        const [response] = sentMessages
+        expect(response?.message).toContain('Summary using backfilled context.')
+        expect(mockFetchCalls).toHaveLength(1)
+        const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
+        expect(body.messages[1].content).toContain('Historical update from archive.')
+    })
+
+    it('skips backfill when cached history already covers the timeframe', async () => {
+        const loadCalls: Array<{ streamId: string; start: number }> = []
+        __setHistoryBackfillHooks({
+            loadEventsSince: async (_bot, streamId, start) => {
+                loadCalls.push({ streamId, start: start.getTime() })
+                return []
+            },
+        })
+
+        const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
+        globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+            mockFetchCalls.push({ url, init })
+            return new Response(
+                JSON.stringify({
+                    choices: [{ message: { content: 'Summary from cache.' } }],
+                }),
+                { status: 200 },
+            )
+        }) as typeof fetch
+
+        const mockBot = createMockBot()
+        registerMessageHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot)
+
+        const messageHandler = mockBot.getMessageHandler()
+        const baseTime = Date.now()
+        await messageHandler({} as BotHandler, {
+            channelId: HEX_CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Older cached context.',
+            eventId: 'cached-event-old',
+            userId: USER_ID,
+            createdAt: new Date(baseTime - 40 * 60 * 1000),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+        await messageHandler({} as BotHandler, {
+            channelId: HEX_CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Cached conversation continues.',
+            eventId: 'cached-event-new',
+            userId: USER_ID,
+            createdAt: new Date(baseTime - 10 * 60 * 1000),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['30m'],
+            userId: USER_ID,
+            channelId: HEX_CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(baseTime),
+            eventId: 'slash-cache',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(loadCalls).toHaveLength(0)
+        expect(sentMessages).toHaveLength(1)
+        expect(sentMessages[0]?.message).toContain('Summary from cache.')
+        expect(mockFetchCalls).toHaveLength(1)
     })
 
     it('falls back to the most recent messages when timeframe is empty', async () => {

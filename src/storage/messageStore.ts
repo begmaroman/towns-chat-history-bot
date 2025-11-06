@@ -27,6 +27,7 @@ type MessageQuery = {
 type ChannelStore = {
     byId: Map<string, StoredMessage>
     orderedIds: string[]
+    earliestTimestamp?: number
 }
 
 const messagesByChannel = new Map<string, ChannelStore>()
@@ -46,15 +47,13 @@ function getChannelStore(channelId: string): ChannelStore {
 export function saveMessage(message: SaveMessageInput): void {
     const channelStore = getChannelStore(message.channelId)
     const existing = channelStore.byId.get(message.eventId)
-    const stored: StoredMessage = {
-        ...message,
-        createdAt: new Date(message.createdAt),
-    }
+    const stored = cloneInputMessage(message)
 
     channelStore.byId.set(message.eventId, stored)
     if (!existing) {
         insertOrdered(channelStore, stored)
     }
+    updateEarliestTimestamp(channelStore, stored.createdAt.getTime())
 }
 
 export function updateMessageContent(
@@ -80,6 +79,7 @@ export function removeMessage(channelId: string, eventId: string): void {
     }
     channelStore.byId.delete(eventId)
     removeFromOrdered(channelStore.orderedIds, eventId)
+    recomputeEarliestTimestamp(channelStore)
 }
 
 export function getMessages(query: MessageQuery): StoredMessage[] {
@@ -154,6 +154,30 @@ export function clearMessages(): void {
 
 export type { StoredMessage as PersistedMessage }
 
+export function getEarliestTimestamp(channelId: string): number | undefined {
+    const store = messagesByChannel.get(channelId)
+    return store?.earliestTimestamp
+}
+
+export function bulkSaveMessages(channelId: string, messages: StoredMessage[]): void {
+    if (!messages.length) {
+        return
+    }
+
+    const channelStore = getChannelStore(channelId)
+    messages
+        .map(cloneInputMessage)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .forEach((message) => {
+            if (channelStore.byId.has(message.eventId)) {
+                return
+            }
+            channelStore.byId.set(message.eventId, message)
+            insertOrdered(channelStore, message)
+            updateEarliestTimestamp(channelStore, message.createdAt.getTime())
+        })
+}
+
 function insertOrdered(channelStore: ChannelStore, message: StoredMessage): void {
     const { orderedIds, byId } = channelStore
     const time = message.createdAt.getTime()
@@ -205,4 +229,30 @@ function cloneStoredMessage(message: StoredMessage): StoredMessage {
         createdAt: new Date(message.createdAt),
         updatedAt: message.updatedAt ? new Date(message.updatedAt) : undefined,
     }
+}
+
+function cloneInputMessage(message: SaveMessageInput | StoredMessage): StoredMessage {
+    return {
+        ...message,
+        createdAt: new Date(message.createdAt),
+        updatedAt: 'updatedAt' in message && message.updatedAt
+            ? new Date(message.updatedAt)
+            : undefined,
+    }
+}
+
+function updateEarliestTimestamp(store: ChannelStore, timestamp: number): void {
+    if (store.earliestTimestamp === undefined || timestamp < store.earliestTimestamp) {
+        store.earliestTimestamp = timestamp
+    }
+}
+
+function recomputeEarliestTimestamp(store: ChannelStore): void {
+    const firstId = store.orderedIds[0]
+    if (!firstId) {
+        store.earliestTimestamp = undefined
+        return
+    }
+    const message = store.byId.get(firstId)
+    store.earliestTimestamp = message ? message.createdAt.getTime() : undefined
 }
