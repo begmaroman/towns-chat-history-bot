@@ -11,15 +11,21 @@ export function registerSummarizeHandler(bot: AppBot): void {
         const timeframeInput = event.args.join(' ').trim()
 
         const unknownWords = timeframeInput ? findUnknownTimeframeWords(timeframeInput) : []
+        if (timeframeInput && unknownWords.length) {
+            await handler.sendMessage(
+                event.channelId,
+                `I don't recognize ${formatWordList(unknownWords)} in that timeframe request. ${TIMEFRAME_USAGE_HELP}`,
+                threadOptions(event),
+            )
+            return
+        }
+
         let timeframe = timeframeInput ? parseTimeframe(timeframeInput, now) : undefined
 
         if (!timeframe && timeframeInput) {
-            const prefix = unknownWords.length
-                ? `I don't recognize ${formatWordList(unknownWords)} in that timeframe request.`
-                : 'Unable to understand timeframe.'
             await handler.sendMessage(
                 event.channelId,
-                `${prefix} ${TIMEFRAME_USAGE_HELP}`,
+                `Unable to understand timeframe. ${TIMEFRAME_USAGE_HELP}`,
                 threadOptions(event),
             )
             return

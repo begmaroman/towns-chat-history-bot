@@ -7,8 +7,9 @@ import { SessionKeysSchema } from '@towns-protocol/proto'
 
 import type { AppBot } from '../types'
 
-const initializedStreams = new Set<string>()
 const inflightInitialisations = new Map<string, Promise<void>>()
+const streamSessionCache = new Map<string, number>()
+const STREAM_SESSION_TTL_MS = 300_000 // 5 minutes session cache TTL
 
 export async function decryptStreamEvent(
   bot: AppBot,
@@ -42,14 +43,17 @@ export function getEncryptedEventContent(event: ParsedEvent): EncryptedData | un
 }
 
 async function ensureStreamKeys(bot: AppBot, streamIdHex: string): Promise<void> {
-    if (initializedStreams.has(streamIdHex)) {
+    if (isCacheFresh(streamIdHex)) {
         return
     }
 
     const existing = inflightInitialisations.get(streamIdHex)
     if (existing) {
         await existing
-        return
+        if (isCacheFresh(streamIdHex)) {
+            return
+        }
+        // fallthrough to refresh if cache expired after awaiting
     }
 
     const loadPromise = loadStreamSessions(bot, streamIdHex)
@@ -57,7 +61,7 @@ async function ensureStreamKeys(bot: AppBot, streamIdHex: string): Promise<void>
 
     try {
         await loadPromise
-        initializedStreams.add(streamIdHex)
+        streamSessionCache.set(streamIdHex, Date.now() + STREAM_SESSION_TTL_MS)
     } finally {
         inflightInitialisations.delete(streamIdHex)
     }
@@ -143,4 +147,16 @@ async function buildSessionKeyImports(
         sessionKey,
         algorithm,
     }))
+}
+
+function isCacheFresh(streamId: string): boolean {
+    const expiry = streamSessionCache.get(streamId)
+    if (expiry === undefined) {
+        return false
+    }
+    if (Date.now() <= expiry) {
+        return true
+    }
+    streamSessionCache.delete(streamId)
+    return false
 }
