@@ -49,7 +49,6 @@ export function registerSummarizeHandler(bot: AppBot): void {
 
         let summaryLabel = timeframe.label
         let summaryStart = timeframe.start
-        let summaryEnd = now
         let fallbackNote: string | undefined
 
         if (!messages.length && isThread && !timeframeInput) {
@@ -61,35 +60,16 @@ export function registerSummarizeHandler(bot: AppBot): void {
             })
             summaryLabel = 'complete thread'
             summaryStart = messages[0]?.createdAt ?? timeframe.start
-            summaryEnd = messages[messages.length - 1]?.createdAt ?? now
         }
 
         if (!messages.length) {
-            const fallbackMessages = getRecentMessages({
-                channelId: event.channelId,
-                threadId: event.threadId ?? undefined,
-                limit: 200,
-            })
-
-            if (!fallbackMessages.length) {
-                await handler.editMessage(
-                    event.channelId,
-                    pending.eventId,
-                    "I haven't seen any messages in this channel yet. I'll start keeping track now!",
-                    threadOptions(event),
-                )
-                return
-            }
-
-            messages = fallbackMessages
-            summaryLabel = isThread
-                ? `latest ${messages.length} thread messages`
-                : `latest ${messages.length} messages`
-            summaryStart = messages[0]!.createdAt
-            summaryEnd = messages[messages.length - 1]!.createdAt
-            if (!isThread || timeframeInput) {
-                fallbackNote = timeframe.label
-            }
+            await handler.editMessage(
+              event.channelId,
+              pending.eventId,
+              "I haven't seen any messages in this channel yet. I'll start keeping track now!",
+              threadOptions(event),
+            )
+            return
         }
 
         try {
@@ -97,7 +77,6 @@ export function registerSummarizeHandler(bot: AppBot): void {
                 messages,
                 timeframeLabel: summaryLabel,
                 start: summaryStart,
-                end: summaryEnd,
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
             })

@@ -4,7 +4,6 @@ export type SummarizeParams = {
     messages: PersistedMessage[]
     timeframeLabel: string
     start: Date
-    end: Date
     channelId: string
     threadId?: string
     model?: string
@@ -50,7 +49,6 @@ export async function summarizeConversation(params: SummarizeParams): Promise<Su
                 content: buildPrompt({
                     transcript,
                     start: params.start,
-                    end: params.end,
                     timeframeLabel: params.timeframeLabel,
                     channelId: params.channelId,
                     threadId: params.threadId,
@@ -94,7 +92,6 @@ type PromptParams = {
     transcript: Transcript
     timeframeLabel: string
     start: Date
-    end: Date
     channelId: string
     threadId?: string
     messageCount: number
@@ -108,7 +105,6 @@ type Transcript = {
 }
 
 function buildPrompt(params: PromptParams): string {
-    const timeRange = `${params.start.toISOString()} – ${params.end.toISOString()}`
     const scope = params.threadId ? `thread (${params.threadId})` : `channel (${params.channelId})`
     const truncationNote = params.transcript.truncated
         ? '\n\nNote: Older messages beyond the character budget were not included.'
@@ -119,7 +115,7 @@ function buildPrompt(params: PromptParams): string {
         : ''
 
     return (
-        `Summarize the following Towns conversation from ${timeRange} (${params.timeframeLabel}) in ${scope}.` +
+        `Summarize the following Towns conversation starting from ${params.start.toISOString()} (${params.timeframeLabel}) in ${scope}.` +
         '\n\nInclude:' +
         '\n- Begin the summary with a short descriptive title (6 words or fewer) on its own line before any other content' +
         '\n- Key themes and decisions' +
