@@ -7,6 +7,7 @@ import {registerMessageHandler} from './handlers/message'
 import {registerMessageEditHandler} from './handlers/messageEdit'
 import {registerRedactionHandler} from './handlers/redaction'
 import {registerSummarizeHandler} from './handlers/summarize'
+import {registerTipHandler} from './handlers/tip'
 
 const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SECRET!, {
     commands,
@@ -17,6 +18,7 @@ registerSummarizeHandler(bot)
 registerMessageHandler(bot)
 registerMessageEditHandler(bot)
 registerRedactionHandler(bot)
+registerTipHandler(bot)
 
 const { jwtMiddleware, handler } = bot.start()
 

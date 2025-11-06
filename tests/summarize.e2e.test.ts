@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import type { BotHandler } from '@towns-protocol/bot'
+import { parseUnits } from 'viem'
 
 import commands from '../src/commands'
 import type { AppBot } from '../src/types'
@@ -9,11 +10,14 @@ import { registerMessageHandler } from '../src/handlers/message'
 import { registerMessageEditHandler } from '../src/handlers/messageEdit'
 import { registerRedactionHandler } from '../src/handlers/redaction'
 import { registerSummarizeHandler } from '../src/handlers/summarize'
+import { registerTipHandler } from '../src/handlers/tip'
 import { clearMessages } from '../src/storage/messageStore'
+import { clearPaymentRequests } from '../src/storage/paymentRequests'
 import { __setHistoryBackfillHooks } from '../src/utils/historyBackfill'
 
 type SlashCommandHandler = Parameters<AppBot['onSlashCommand']>[1]
 type MessageHandler = Parameters<AppBot['onMessage']>[0]
+type TipHandler = Parameters<AppBot['onTip']>[0]
 
 const CHANNEL_ID = '20e38d1437e1b91bf6b6bc21d6a97b7a'
 const SPACE_ID = 'space-1'
@@ -33,6 +37,7 @@ function createMockBot() {
     let messageHandler: MessageHandler | undefined
     let messageEditHandler: Parameters<AppBot['onMessageEdit']>[0] | undefined
     let redactionHandler: Parameters<AppBot['onRedaction']>[0] | undefined
+    let tipHandler: TipHandler | undefined
 
     const bot = {
         botId: BOT_ID,
@@ -47,6 +52,9 @@ function createMockBot() {
         },
         onRedaction(handler: Parameters<AppBot['onRedaction']>[0]) {
             redactionHandler = handler
+        },
+        onTip(handler: TipHandler) {
+            tipHandler = handler
         },
     } as unknown as AppBot
 
@@ -71,11 +79,15 @@ function createMockBot() {
         getRedactionHandler() {
             return redactionHandler
         },
+        getTipHandler() {
+            return tipHandler
+        },
         reset() {
             slashCommandHandlers = new Map()
             messageHandler = undefined
             messageEditHandler = undefined
             redactionHandler = undefined
+            tipHandler = undefined
         },
     }
 }
@@ -121,6 +133,7 @@ const ORIGINAL_FETCH = globalThis.fetch
 describe('summarize command', () => {
     beforeEach(() => {
         clearMessages()
+        clearPaymentRequests()
         process.env.OPENAI_API_KEY = 'test-api-key'
         __setHistoryBackfillHooks({
             loadEventsSince: async () => [],
@@ -130,6 +143,7 @@ describe('summarize command', () => {
 
     afterEach(() => {
         clearMessages()
+        clearPaymentRequests()
         if (ORIGINAL_FETCH) {
             globalThis.fetch = ORIGINAL_FETCH
         }
@@ -155,6 +169,7 @@ describe('summarize command', () => {
         registerMessageEditHandler(mockBot.bot)
         registerRedactionHandler(mockBot.bot)
         registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now()
@@ -200,6 +215,129 @@ describe('summarize command', () => {
         expect(body.messages[1].content).toContain('Discussed release plan.')
     })
 
+    it('requires payment for summaries exceeding the free window', async () => {
+        globalThis.fetch = ((async () => {
+            throw new Error('Fetch should not be called before payment is received')
+        }) as unknown as typeof fetch)
+
+        const mockBot = createMockBot()
+        registerMessageHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
+
+        const messageHandler = mockBot.getMessageHandler()
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Historical context.',
+            eventId: 'event-ctx',
+            userId: USER_ID,
+            createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['2d'],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-paywall',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        const paymentPrompt = sentMessages[0]?.message
+        expect(paymentPrompt).toMatch(/Tip this message/)
+        expect(paymentPrompt).toMatch(/extra day/)
+        expect(paymentPrompt).toMatch(/USDC/)
+    })
+
+    it('generates the summary after the user tips the required amount', async () => {
+        const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
+        globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+            mockFetchCalls.push({ url, init })
+            return new Response(
+                JSON.stringify({
+                    choices: [{ message: { content: 'Paid summary content.' } }],
+                }),
+                { status: 200 },
+            )
+        }) as typeof fetch
+
+        const mockBot = createMockBot()
+        registerMessageHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
+
+        const messageHandler = mockBot.getMessageHandler()
+        const baseTime = Date.now() - 36 * 60 * 60 * 1000
+
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Message inside paid window.',
+            eventId: 'event-paid',
+            userId: USER_ID,
+            createdAt: new Date(baseTime),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['2d'],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-paid',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        const paymentMessage = sentMessages[0]
+        expect(paymentMessage?.message).toMatch(/Tip this message/)
+
+        const tipHandler = mockBot.getTipHandler()
+        if (!tipHandler) {
+            throw new Error('Tip handler not registered')
+        }
+
+        await tipHandler(handler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            eventId: 'tip-1',
+            userId: USER_ID,
+            createdAt: new Date(),
+            messageId: paymentMessage?.eventId ?? 'sent-1',
+            senderAddress: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+            receiverAddress: BOT_ID,
+            receiverUserId: BOT_ID,
+            amount: parseUnits('1', 18),
+            currency: '0x0000000000000000000000000000000000000000',
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        expect(sentMessages[0]?.message).toContain('**Summary (2d)**')
+        expect(sentMessages[0]?.message).toContain('Paid summary content.')
+        expect(mockFetchCalls).toHaveLength(1)
+    })
+
     it('backfills historical messages for hex channel IDs when cache is empty', async () => {
         const loadCalls: Array<{ streamId: string; start: number }> = []
         const historicalCreatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000)
@@ -237,6 +375,7 @@ describe('summarize command', () => {
 
         const mockBot = createMockBot()
         registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
 
         const { handler, sentMessages } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
@@ -287,6 +426,7 @@ describe('summarize command', () => {
         const mockBot = createMockBot()
         registerMessageHandler(mockBot.bot)
         registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now()
@@ -351,6 +491,7 @@ describe('summarize command', () => {
         const mockBot = createMockBot()
         registerMessageHandler(mockBot.bot)
         registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now()
@@ -399,6 +540,7 @@ describe('summarize command', () => {
 
         const mockBot = createMockBot()
         registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
 
         const { handler, sentMessages } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
@@ -423,6 +565,7 @@ describe('summarize command', () => {
     it('guides the user when timeframe parsing fails', async () => {
         const mockBot = createMockBot()
         registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
 
         const { handler, sentMessages } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
@@ -457,6 +600,7 @@ describe('summarize command', () => {
 
         const mockBot = createMockBot()
         registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
         registerMessageHandler(mockBot.bot)
 
         const messageHandler = mockBot.getMessageHandler()
@@ -512,6 +656,7 @@ describe('summarize command', () => {
         const mockBot = createMockBot()
         registerMessageHandler(mockBot.bot)
         registerSummarizeHandler(mockBot.bot)
+        registerTipHandler(mockBot.bot)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now()

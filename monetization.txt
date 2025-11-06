@@ -1,0 +1,15 @@
+Let's implement the following monetization of the bot.
+
+Users can request summary for the last 24h for free.
+If they want to request more, they should pay $1 per extra day. The flow is the following:
+1. user requests a summary for > 1 day
+2. bot sends a message to the thread that explains that the user has to pay by tipping this bot's message with a needed amount
+3. after tip is received, the bot verifies it and goes throught the current flow starting the preparing a summary.
+
+Implementation details:
+- Use bot.onTip to handle receiving tips from user; feel free to take a look at ../towns-poker-cashier-bot tip handler as a reference.
+
+As the first version of the monetization feature, let's do the following:
+1. user requests a summary for > 1 day
+2. bot sends a message to the thread that explains that the user has to pay by tipping this bot's message with $1
+3. after tip is received, the bot verifies it and goes through the current flow starting the preparing a summary
