@@ -165,7 +165,45 @@ function formatMessageLine(message: PersistedMessage): string {
     const timestamp = message.createdAt.toISOString()
     const author = message.userId
     const content = normaliseWhitespace(message.message)
-    return `[${timestamp}] ${author}: ${content}`
+    const relation = replyDescriptor(message)
+    return relation
+        ? `[${timestamp}] ${author} ${relation}: ${content}`
+        : `[${timestamp}] ${author}: ${content}`
+}
+
+function replyDescriptor(message: PersistedMessage): string | undefined {
+    const { threadId, replyId } = message
+    if (!threadId && !replyId) {
+        return undefined
+    }
+
+    const threadRef = threadId ? shortenId(threadId) : undefined
+    const replyRef = replyId ? shortenId(replyId) : undefined
+
+    if (threadId && (!replyId || replyId === threadId)) {
+        return `(↪ thread:${threadRef})`
+    }
+
+    if (replyId) {
+        return threadId && replyId !== threadId
+            ? `(↪ thread:${threadRef} msg:${replyRef})`
+            : `(↪ msg:${replyRef})`
+    }
+
+    return undefined
+}
+
+function shortenId(id: string, length = 8): string {
+    if (!id) {
+        return id
+    }
+    const clean = id.startsWith('0x') ? id : `0x${id}`
+    if (clean.length <= length + 2) {
+        return clean
+    }
+    const prefix = clean.slice(0, Math.ceil((length - 1) / 2))
+    const suffix = clean.slice(-Math.floor((length - 1) / 2))
+    return `${prefix}…${suffix}`
 }
 
 function normaliseWhitespace(text: string): string {
