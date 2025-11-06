@@ -138,56 +138,90 @@ const DEFAULT_CHAR_LIMIT = 20_000
 
 function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): Transcript {
     const characterBudget = maxCharacters ?? DEFAULT_CHAR_LIMIT
-    let usedCharacters = 0
     let truncated = false
-    const lines: string[] = []
     const participants = new Set<string>()
+    const labelMap = new Map<string, string>()
+    const committedEntries: Record<string, unknown>[] = []
 
-    for (const message of messages) {
-        const line = formatMessageLine(message)
-        const lineLength = line.length + 1 // account for newline
-        if (usedCharacters + lineLength > characterBudget) {
+    for (let index = 0; index < messages.length; index++) {
+        const message = messages[index]
+        const candidateLabel = labelMap.get(message.eventId) ?? makeLabel(committedEntries.length + 1)
+        const entry = buildMessageEntry(message, candidateLabel, labelMap)
+
+        const projectedEntries = [...committedEntries, entry]
+        const projectedText = JSON.stringify(projectedEntries, null, 2)
+        if (projectedText.length > characterBudget) {
             truncated = true
             break
         }
-        lines.push(line)
-        usedCharacters += lineLength
+
+        committedEntries.push(entry)
+        labelMap.set(message.eventId, candidateLabel)
         participants.add(message.userId)
     }
 
     return {
-        text: lines.join('\n'),
-        messageCount: lines.length,
+        text: JSON.stringify(committedEntries),
+        messageCount: committedEntries.length,
         truncated,
         participants: Array.from(participants),
     }
 }
 
-function formatMessageLine(message: PersistedMessage): string {
-    const timestamp = message.createdAt.toISOString()
-    const author = message.userId
-    const content = normaliseWhitespace(message.message)
-    const relation = replyDescriptor(message)
-    return relation
-        ? `[${timestamp}] ${author} ${relation}: ${content}`
-        : `[${timestamp}] ${author}: ${content}`
+function buildMessageEntry(
+    message: PersistedMessage,
+    label: string,
+    labels: Map<string, string>,
+): Record<string, unknown> {
+    const entry: Record<string, unknown> = {
+        id: label,
+        eventRef: shortenId(message.eventId),
+        timestamp: message.createdAt.toISOString(),
+        author: message.userId,
+        message: normaliseWhitespace(message.message),
+    }
+
+    if (message.updatedAt) {
+        entry.editedAt = message.updatedAt.toISOString()
+    }
+
+    const replyMetadata = buildReplyMetadata(message, labels)
+    if (replyMetadata) {
+        entry.replyTo = replyMetadata
+    }
+
+    return entry
 }
 
-function replyDescriptor(message: PersistedMessage): string | undefined {
+function buildReplyMetadata(
+    message: PersistedMessage,
+    labels: Map<string, string>,
+): { thread?: { id: string; label: string }; message?: { id: string; label: string } } | undefined {
     const { threadId, replyId } = message
     if (!threadId && !replyId) {
         return undefined
     }
 
+    const result: {
+        thread?: { id: string; label: string }
+        message?: { id: string; label: string }
+    } = {}
+
     if (threadId) {
-        return `(thread:${shortenId(threadId)})`
+        result.thread = {
+            id: threadId,
+            label: labels.get(threadId) ?? shortenId(threadId),
+        }
     }
 
-    if (replyId) {
-        return `(reply_to:${shortenId(replyId)})`
+    if (replyId && (!threadId || replyId !== threadId)) {
+        result.message = {
+            id: replyId,
+            label: labels.get(replyId) ?? shortenId(replyId),
+        }
     }
 
-    return undefined
+    return Object.keys(result).length ? result : undefined
 }
 
 function shortenId(id: string, length = 8): string {
@@ -205,4 +239,9 @@ function shortenId(id: string, length = 8): string {
 
 function normaliseWhitespace(text: string): string {
     return text.replace(/\s+/g, ' ').trim()
+}
+
+function makeLabel(index: number): string {
+    const base = String(index).padStart(3, '0')
+    return `m${base}`
 }

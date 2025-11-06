@@ -36,7 +36,7 @@ export async function ensureMessagesForRange(bot: AppBot, channelId: string, sta
         try {
             const events = await loadEvents(bot, channelId, start)
             const messages = await transformEvents(bot, channelId, events)
-            const filtered = messages.filter((message) => message.userId !== bot.botId)
+            const filtered = messages.filter((message) => message.userId.toLowerCase() !== bot.botId.toLowerCase())
             if (filtered.length) {
                 saveMessages(channelId, filtered)
             }
