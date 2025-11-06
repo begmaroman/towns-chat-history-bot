@@ -7,12 +7,13 @@ import { SessionKeysSchema } from '@towns-protocol/proto'
 
 import type { AppBot } from '../types'
 
+const initializedStreams = new Set<string>()
 const inflightInitialisations = new Map<string, Promise<void>>()
 
 export async function decryptStreamEvent(
-    bot: AppBot,
-    streamIdHex: string,
-    event: ParsedEvent,
+  bot: AppBot,
+  streamIdHex: string,
+  event: ParsedEvent,
 ): Promise<string | Uint8Array | undefined> {
     const encryptedContent = getEncryptedEventContent(event)
     if (!encryptedContent) {
@@ -41,6 +42,10 @@ export function getEncryptedEventContent(event: ParsedEvent): EncryptedData | un
 }
 
 async function ensureStreamKeys(bot: AppBot, streamIdHex: string): Promise<void> {
+    if (initializedStreams.has(streamIdHex)) {
+        return
+    }
+
     const existing = inflightInitialisations.get(streamIdHex)
     if (existing) {
         await existing
@@ -52,6 +57,7 @@ async function ensureStreamKeys(bot: AppBot, streamIdHex: string): Promise<void>
 
     try {
         await loadPromise
+        initializedStreams.add(streamIdHex)
     } finally {
         inflightInitialisations.delete(streamIdHex)
     }
