@@ -11,23 +11,27 @@ export function registerSummarizeHandler(bot: AppBot): void {
         const isThread = Boolean(event.threadId)
         const timeframeInput = event.args.join(' ').trim()
 
-        let timeframe = timeframeInput
-            ? parseTimeframe(timeframeInput, now)
-            : isThread
-              ? {
-                    start: new Date(0),
-                    end: now,
-                    label: 'complete thread',
-                }
-              : parseTimeframe(DEFAULT_TIMEFRAME, now)
+        let timeframe = timeframeInput ? parseTimeframe(timeframeInput, now) : undefined
 
-        if (!timeframe) {
+        if (!timeframe && timeframeInput) {
             await handler.sendMessage(
                 event.channelId,
                 'Unable to understand timeframe. Try formats like `12h`, `2d`, `1w`, or phrases such as `last 3 hours`.',
                 threadOptions(event),
             )
             return
+        }
+
+        if (!timeframe) {
+            timeframe = isThread
+                ? {
+                      start: new Date(0),
+                      label: 'complete thread',
+                  }
+                : {
+                      start: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+                      label: '24 hours',
+                  }
         }
 
         const pending = await handler.sendMessage(
@@ -40,13 +44,12 @@ export function registerSummarizeHandler(bot: AppBot): void {
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
             start: timeframe.start,
-            end: timeframe.end,
             limit: 400,
         })
 
         let summaryLabel = timeframe.label
         let summaryStart = timeframe.start
-        let summaryEnd = timeframe.end
+        let summaryEnd = now
         let fallbackNote: string | undefined
 
         if (!messages.length && isThread && !timeframeInput) {
@@ -54,12 +57,11 @@ export function registerSummarizeHandler(bot: AppBot): void {
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
                 start: new Date(0),
-                end: now,
                 limit: 400,
             })
             summaryLabel = 'complete thread'
             summaryStart = messages[0]?.createdAt ?? timeframe.start
-            summaryEnd = messages[messages.length - 1]?.createdAt ?? timeframe.end
+            summaryEnd = messages[messages.length - 1]?.createdAt ?? now
         }
 
         if (!messages.length) {
