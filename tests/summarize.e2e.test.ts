@@ -194,7 +194,7 @@ describe('summarize command', () => {
         expect(sentMessages).toHaveLength(1)
         expect(sentMessages[0]?.message).toContain('**Summary (30m)**')
         expect(sentMessages[0]?.message).toContain('Summary content for timeframe.')
-        expect(sentMessages[0]?.message).toContain('Analyzed 1 messages')
+        expect(sentMessages[0]?.message).toContain('Analyzed 1 message(s)')
         expect(mockFetchCalls).toHaveLength(1)
         const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
         expect(body.messages[1].content).toContain('Discussed release plan.')
@@ -603,7 +603,7 @@ describe('summarize command', () => {
         const [response] = sentMessages
         expect(response?.message).toContain('**Summary (complete thread)**')
         expect(response?.message).toContain('Thread summary.')
-        expect(response?.message).toContain('Analyzed 3 messages')
+        expect(response?.message).toContain('Analyzed 3 message(s)')
         expect(mockFetchCalls).toHaveLength(1)
     })
 
