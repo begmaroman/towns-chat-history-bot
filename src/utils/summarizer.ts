@@ -16,8 +16,26 @@ export type SummarizeResult = {
     usedMessages: number
 }
 
-const DEFAULT_MODEL = process.env.OPENAI_SUMMARY_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4o-mini'
+const DEFAULT_MODEL = process.env.OPENAI_SUMMARY_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4.1-mini'
 const OPENAI_ENDPOINT = process.env.OPENAI_API_ENDPOINT ?? 'https://api.openai.com/v1/chat/completions'
+
+const SUMMARY_PROMPT_TEMPLATE = `Summarize the following Towns conversation starting from {{startIso}} ({{timeframeLabel}}) in {{scope}}.
+
+Include:
+- No general title required
+- Key themes and decisions
+- Action items with owners (format owners as <@userId>)
+- Open questions or follow-ups
+- Format every user reference as <@userId> instead of a plain address
+- Use the complete userId when constructing <@userId> mentions; do not shorten or truncate
+- Map author field in the message object to participant and use a full identifier
+
+If the content is sparse, mention that explicitly.
+{{truncationNote}}
+
+Messages provided ({{messageCount}}):
+{{transcript}}
+{{participantsNote}}`
 
 export async function summarizeConversation(params: SummarizeParams): Promise<SummarizeResult> {
     const apiKey = process.env.OPENAI_API_KEY
@@ -35,7 +53,6 @@ export async function summarizeConversation(params: SummarizeParams): Promise<Su
 
     const transcript = buildTranscript(params.messages, params.maxCharacters)
 
-    console.log(transcript)
 
     const body = {
         model: params.model ?? DEFAULT_MODEL,
@@ -116,23 +133,15 @@ function buildPrompt(params: PromptParams): string {
           params.transcript.participants.map((id) => `- <@${id}>`).join('\n')
         : ''
 
-    // TODO: Create a summary message template
-    return (
-        `Summarize the following Towns conversation starting from ${params.start.toISOString()} (${params.timeframeLabel}) in ${scope}.` +
-        '\n\nInclude:' +
-        '\n- No general title required' +
-        '\n- Key themes and decisions' +
-        '\n- Action items with owners (format owners as <@userId>)' +
-        '\n- Open questions or follow-ups' +
-        '\n- Format every user reference as <@userId> instead of a plain address' +
-        '\n- Use the complete userId when constructing <@userId> mentions; do not shorten or truncate' +
-        '\n- Map author field in the message object to participant and use a full identifier' +
-        '\n\nIf the content is sparse, mention that explicitly.' +
-        truncationNote +
-        `\n\nMessages provided (${params.messageCount}):\n` +
-        params.transcript.text +
-        participantsNote
-    )
+    return renderTemplate(SUMMARY_PROMPT_TEMPLATE, {
+        startIso: params.start.toISOString(),
+        timeframeLabel: params.timeframeLabel,
+        scope,
+        truncationNote,
+        messageCount: params.messageCount.toString(),
+        transcript: params.transcript.text,
+        participantsNote,
+    })
 }
 
 const DEFAULT_CHAR_LIMIT = 50_000
@@ -143,23 +152,20 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
     const participants = new Set<string>()
     const committedEntries: Record<string, unknown>[] = []
 
-    for (let index = 0; index < messages.length; index++) {
-        const message = messages[index]
+    for (const message of messages) {
         const entry = buildMessageEntry(message)
-
-        const projectedEntries = [...committedEntries, entry]
-        const projectedText = JSON.stringify(projectedEntries, null, 2)
+        committedEntries.push(entry)
+        const projectedText = JSON.stringify(committedEntries, null, 2)
         if (projectedText.length > characterBudget) {
+            committedEntries.pop()
             truncated = true
             break
         }
-
-        committedEntries.push(entry)
         participants.add(message.userId)
     }
 
     return {
-        text: JSON.stringify(committedEntries),
+        text: JSON.stringify(committedEntries, null, 2),
         messageCount: committedEntries.length,
         truncated,
         participants: Array.from(participants),
@@ -168,9 +174,9 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
 
 function buildMessageEntry(message: PersistedMessage): Record<string, unknown> {
     const entry: Record<string, unknown> = {
-        id: shortenId(message.eventId),
+        id: message.eventId,
         timestamp: message.createdAt.toISOString(),
-        author: shortenId(message.userId),
+        participant: message.userId,
         message: normaliseWhitespace(message.message),
     }
 
@@ -178,34 +184,34 @@ function buildMessageEntry(message: PersistedMessage): Record<string, unknown> {
         entry.editedAt = message.updatedAt.toISOString()
     }
 
-    const replyMetadata = buildReplyMetadata(message)
-    if (replyMetadata) {
-        entry.replyTo = replyMetadata
+    const replyInfo = buildReplyMetadata(message)
+    if (replyInfo) {
+        entry.replyTo = replyInfo
     }
 
     return entry
 }
 
-function buildReplyMetadata(message: PersistedMessage): { threadId?: string; replyId?: string } | undefined {
+function buildReplyMetadata(message: PersistedMessage,): { thread?: string; message?: string } | undefined {
     const { threadId, replyId } = message
     if (!threadId && !replyId) {
         return undefined
     }
 
-    const result: {
-        threadId?: string
-        replyId?: string
+    const metadata: {
+        thread?: string
+        message?: string
     } = {}
 
     if (threadId) {
-        result.threadId = threadId
+        metadata.thread = threadId
     }
 
     if (replyId) {
-        result.replyId = replyId
+        metadata.message = replyId
     }
 
-    return Object.keys(result).length ? result : undefined
+    return Object.keys(metadata).length ? metadata : undefined
 }
 
 function shortenId(id: string, length = 8): string {
@@ -223,4 +229,8 @@ function shortenId(id: string, length = 8): string {
 
 function normaliseWhitespace(text: string): string {
     return text.replace(/\s+/g, ' ').trim()
+}
+
+function renderTemplate(template: string, values: Record<string, string>): string {
+    return template.replace(/{{(\w+)}}/g, (_, key) => values[key] ?? '')
 }
