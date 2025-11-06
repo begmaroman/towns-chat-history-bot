@@ -123,7 +123,6 @@ function buildPrompt(params: PromptParams): string {
         '\n- Key themes and decisions' +
         '\n- Action items with owners (format owners as <@userId>)' +
         '\n- Open questions or follow-ups' +
-        '\n- Sentiment or tone shifts if notable' +
         '\n- Format every user reference as <@userId> instead of a plain address' +
         '\n- Use the complete userId when constructing <@userId> mentions; do not shorten or truncate' +
         '\n- Map author field in the message object to participant and use a full identifier' +
