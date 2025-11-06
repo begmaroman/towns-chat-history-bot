@@ -9,7 +9,7 @@ import type { AppBot } from '../types'
 
 const inflightInitialisations = new Map<string, Promise<void>>()
 const streamSessionCache = new Map<string, number>()
-const STREAM_SESSION_TTL_MS = 300_000 // 5 minutes session cache TTL
+const STREAM_SESSION_TTL_MS = 180_000 // 3 minutes session cache TTL
 
 export async function decryptStreamEvent(
   bot: AppBot,
@@ -89,6 +89,9 @@ async function loadStreamSessions(bot: AppBot, streamIdHex: string): Promise<voi
     ) {
         throw new Error('Unexpected payload in group encryption session response')
     }
+
+    // Delete existing keys first
+    await bot.client.crypto.cryptoStore.deleteHybridGroupSessions(streamIdHex)
 
     const sessions = parsedSession.event.payload.value.content.value
     await bot.client.importGroupEncryptionSessions({
