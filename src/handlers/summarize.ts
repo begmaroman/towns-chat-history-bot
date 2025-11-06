@@ -43,7 +43,6 @@ export function registerSummarizeHandler(bot: AppBot): void {
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
             start: rangeStart,
-            end: now,
             limit: 400,
         })
 
@@ -57,7 +56,6 @@ export function registerSummarizeHandler(bot: AppBot): void {
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
                 start: new Date(0),
-                end: now,
                 limit: 400,
             })
             summaryLabel = 'complete thread'

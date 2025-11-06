@@ -20,7 +20,6 @@ type UpdateMessageInput = {
 type MessageQuery = {
     channelId: string
     start: Date
-    end: Date
     threadId?: string
     limit?: number
 }
@@ -76,7 +75,6 @@ export function getMessages(query: MessageQuery): StoredMessage[] {
 
     const limit = query.limit ?? 400
     const startTime = query.start.getTime()
-    const endTime = query.end.getTime()
     const threadId = query.threadId
 
     const results: StoredMessage[] = []
@@ -84,7 +82,7 @@ export function getMessages(query: MessageQuery): StoredMessage[] {
 
     for (const stored of channelStore.values()) {
         const created = stored.createdAt.getTime()
-        if (created < startTime || created > endTime) {
+        if (created < startTime) {
             continue
         }
         if (threadId && stored.threadId !== threadId && stored.eventId !== originId) {
