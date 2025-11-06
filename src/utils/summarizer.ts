@@ -126,6 +126,7 @@ function buildPrompt(params: PromptParams): string {
         '\n- Sentiment or tone shifts if notable' +
         '\n- Format every user reference as <@userId> instead of a plain address' +
         '\n- Use the complete userId when constructing <@userId> mentions; do not shorten or truncate' +
+        '\n- Map author field in the message object to participant and use a full identifier' +
         '\n\nIf the content is sparse, mention that explicitly.' +
         truncationNote +
         `\n\nMessages provided (${params.messageCount}):\n` +
