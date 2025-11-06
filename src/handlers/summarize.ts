@@ -11,15 +11,16 @@ export function registerSummarizeHandler(bot: AppBot): void {
         const isThread = Boolean(event.threadId)
         const timeframeInput = event.args.join(' ').trim()
 
-        let timeframe = timeframeInput
-            ? parseTimeframe(timeframeInput, now)
-            : isThread
-              ? {
-                    start: new Date(0),
-                    end: now,
-                    label: 'complete thread',
-                }
-              : parseTimeframe(DEFAULT_TIMEFRAME, now)
+        let timeframe = timeframeInput ? parseTimeframe(timeframeInput, now) : undefined
+
+        if (!timeframe) {
+            timeframe = isThread
+                ? {
+                      start: new Date(0),
+                      label: 'complete thread',
+                  }
+                : parseTimeframe(DEFAULT_TIMEFRAME, now) ?? undefined
+        }
 
         if (!timeframe) {
             await handler.sendMessage(
@@ -36,17 +37,19 @@ export function registerSummarizeHandler(bot: AppBot): void {
             threadOptions(event),
         )
 
+        const rangeStart = timeframe.start
+
         let messages = getMessages({
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
-            start: timeframe.start,
-            end: timeframe.end,
+            start: rangeStart,
+            end: now,
             limit: 400,
         })
 
         let summaryLabel = timeframe.label
         let summaryStart = timeframe.start
-        let summaryEnd = timeframe.end
+        let summaryEnd = now
         let fallbackNote: string | undefined
 
         if (!messages.length && isThread && !timeframeInput) {
@@ -59,7 +62,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
             })
             summaryLabel = 'complete thread'
             summaryStart = messages[0]?.createdAt ?? timeframe.start
-            summaryEnd = messages[messages.length - 1]?.createdAt ?? timeframe.end
+            summaryEnd = messages[messages.length - 1]?.createdAt ?? now
         }
 
         if (!messages.length) {

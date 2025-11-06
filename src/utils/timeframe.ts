@@ -1,6 +1,5 @@
 export type ParsedTimeframe = {
     start: Date
-    end: Date
     label: string
 }
 
@@ -42,12 +41,10 @@ export function parseTimeframe(input?: string, now = new Date()): ParsedTimefram
         return null
     }
 
-    const end = now
-    const start = new Date(end.getTime() - totalMs)
+    const start = new Date(now.getTime() - totalMs)
 
     return {
         start,
-        end,
         label: label || formatLabel(totalMs),
     }
 }

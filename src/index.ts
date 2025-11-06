@@ -8,7 +8,7 @@ import {registerMessageEditHandler} from './handlers/messageEdit'
 import {registerRedactionHandler} from './handlers/redaction'
 import {registerSummarizeHandler} from './handlers/summarize'
 import {loadEventsSince} from './utils/miniblockLoader'
-import {transformEventsToPersistedMessages, transformEventToPersistedMessage} from './utils/eventTransform'
+import {transformEventsToPersistedMessages} from './utils/eventTransform'
 
 const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SECRET!, {
     commands,
