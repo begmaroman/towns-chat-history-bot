@@ -7,7 +7,7 @@ export async function dumpStreamMessages(bot: AppBot, streamIdHex: string): Prom
         throw new Error('DEBUG_STREAM_ID must be a non-empty hex string')
     }
 
-    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000)
+    const twelveHoursAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
     const events = await loadEventsSince(bot, streamIdHex, twelveHoursAgo)
     const messages = await transformEventsToPersistedMessages(bot, streamIdHex, events)
 
