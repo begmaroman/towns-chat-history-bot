@@ -133,14 +133,10 @@ export function registerSummarizeHandler(bot: AppBot): void {
     })
 }
 
-function threadOptions(event: { threadId?: string | undefined }):
-    | {
-          threadId: string
-      }
-    | undefined {
-    return event.threadId
-        ? {
-              threadId: event.threadId,
-          }
-        : undefined
+function threadOptions(event: { threadId?: string | undefined; eventId: string }): {
+    threadId: string
+} {
+    return {
+        threadId: event.threadId ?? event.eventId,
+    }
 }
