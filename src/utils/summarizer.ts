@@ -140,13 +140,11 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
     const characterBudget = maxCharacters ?? DEFAULT_CHAR_LIMIT
     let truncated = false
     const participants = new Set<string>()
-    const labelMap = new Map<string, string>()
     const committedEntries: Record<string, unknown>[] = []
 
     for (let index = 0; index < messages.length; index++) {
         const message = messages[index]
-        const candidateLabel = labelMap.get(message.eventId) ?? makeLabel(committedEntries.length + 1)
-        const entry = buildMessageEntry(message, candidateLabel, labelMap)
+        const entry = buildMessageEntry(message)
 
         const projectedEntries = [...committedEntries, entry]
         const projectedText = JSON.stringify(projectedEntries, null, 2)
@@ -156,7 +154,6 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
         }
 
         committedEntries.push(entry)
-        labelMap.set(message.eventId, candidateLabel)
         participants.add(message.userId)
     }
 
@@ -168,16 +165,11 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
     }
 }
 
-function buildMessageEntry(
-    message: PersistedMessage,
-    label: string,
-    labels: Map<string, string>,
-): Record<string, unknown> {
+function buildMessageEntry(message: PersistedMessage): Record<string, unknown> {
     const entry: Record<string, unknown> = {
-        id: label,
-        eventRef: shortenId(message.eventId),
+        id: shortenId(message.eventId),
         timestamp: message.createdAt.toISOString(),
-        author: message.userId,
+        author: shortenId(message.userId),
         message: normaliseWhitespace(message.message),
     }
 
@@ -185,7 +177,7 @@ function buildMessageEntry(
         entry.editedAt = message.updatedAt.toISOString()
     }
 
-    const replyMetadata = buildReplyMetadata(message, labels)
+    const replyMetadata = buildReplyMetadata(message)
     if (replyMetadata) {
         entry.replyTo = replyMetadata
     }
@@ -193,32 +185,23 @@ function buildMessageEntry(
     return entry
 }
 
-function buildReplyMetadata(
-    message: PersistedMessage,
-    labels: Map<string, string>,
-): { thread?: { id: string; label: string }; message?: { id: string; label: string } } | undefined {
+function buildReplyMetadata(message: PersistedMessage): { threadId?: string; replyId?: string } | undefined {
     const { threadId, replyId } = message
     if (!threadId && !replyId) {
         return undefined
     }
 
     const result: {
-        thread?: { id: string; label: string }
-        message?: { id: string; label: string }
+        threadId?: string
+        replyId?: string
     } = {}
 
     if (threadId) {
-        result.thread = {
-            id: threadId,
-            label: labels.get(threadId) ?? shortenId(threadId),
-        }
+        result.threadId = threadId
     }
 
-    if (replyId && (!threadId || replyId !== threadId)) {
-        result.message = {
-            id: replyId,
-            label: labels.get(replyId) ?? shortenId(replyId),
-        }
+    if (replyId) {
+        result.replyId = replyId
     }
 
     return Object.keys(result).length ? result : undefined
