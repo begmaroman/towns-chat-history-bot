@@ -1,17 +1,18 @@
-import { fromJsonString } from '@bufbuild/protobuf'
-import { makeTownsBot } from '@towns-protocol/bot'
-import { bin_toString } from '@towns-protocol/utils'
-import { Hono } from 'hono'
-import { logger } from 'hono/logger'
+import {fromJsonString, fromBinary} from '@bufbuild/protobuf'
+import {makeTownsBot} from '@towns-protocol/bot'
+import {bin_toHexString, bin_toString} from '@towns-protocol/utils'
+import {Hono} from 'hono'
+import {logger} from 'hono/logger'
 import commands from './commands'
-import { registerHelpHandler } from './handlers/help'
-import { registerMessageHandler } from './handlers/message'
-import { registerMessageEditHandler } from './handlers/messageEdit'
-import { registerRedactionHandler } from './handlers/redaction'
-import { registerSummarizeHandler } from './handlers/summarize'
-import { ChannelMessageSchema } from '@towns-protocol/proto'
-import { loadEventsSince } from './utils/miniblockLoader'
-import { decryptStreamEvent, getEncryptedEventContent } from './utils/streamDecryption'
+import {registerHelpHandler} from './handlers/help'
+import {registerMessageHandler} from './handlers/message'
+import {registerMessageEditHandler} from './handlers/messageEdit'
+import {registerRedactionHandler} from './handlers/redaction'
+import {registerSummarizeHandler} from './handlers/summarize'
+import {ChannelMessage, ChannelMessageSchema, MessageInteractionType} from '@towns-protocol/proto'
+import {loadEventsSince} from './utils/miniblockLoader'
+import {decryptStreamEvent, getEncryptedEventContent} from './utils/streamDecryption'
+import type {PersistedMessage} from './storage/messageStore'
 
 const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SECRET!, {
     commands,
@@ -47,16 +48,53 @@ async function dumpStreamMessages(streamIdHex: string) {
             continue
         }
 
+        const tags = parsed.event.tags
+        const interactionType = tags?.messageInteractionType
+        const threadIdFromTags = tags?.threadId ? bin_toHexString(tags.threadId) : undefined
+        const isReply = interactionType === MessageInteractionType.REPLY
+        const isThreadReply = Boolean(threadIdFromTags)
+
         const encryptedContent = getEncryptedEventContent(parsed)
-        const replyId = encryptedContent?.refEventId
+        const replyFromEnvelope = encryptedContent?.refEventId
         const timestampMs = typeof parsed.event.createdAtEpochMs === 'bigint'
             ? Number(parsed.event.createdAtEpochMs)
             : parsed.event.createdAtEpochMs
         const timestampIso = new Date(timestampMs).toISOString()
         const parsedMessage = parseChannelMessage(cleartext)
+        const threadIdFromPayload = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.threadId : undefined
+        const inlineReplyId = parsedMessage?.payload.case === 'post' ? parsedMessage.payload.value.replyId : undefined
+        const threadId = threadIdFromTags ?? threadIdFromPayload
         const content = formatCleartext(cleartext, parsedMessage)
-        const replyNote = replyId ? ` (reply to ${replyId})` : ''
-        console.log(`[${timestampIso}]${replyNote} ${content}`)
+        const replyTargetId =
+            replyFromEnvelope ??
+            (isThreadReply ? threadId : undefined) ??
+            inlineReplyId
+
+        let storedThreadId = threadId
+        let storedReplyId = replyTargetId
+
+        if (isReply) {
+            if (isThreadReply) {
+                storedReplyId = undefined
+                storedThreadId = threadId
+            } else {
+                storedReplyId = replyTargetId
+                storedThreadId = undefined
+            }
+        }
+
+        const stored: PersistedMessage = {
+            eventId: parsed.hashStr,
+            channelId: streamIdHex,
+            threadId: storedThreadId,
+            replyId: storedReplyId,
+            userId: parsed.creatorUserId,
+            message: content,
+            createdAt: new Date(timestampMs),
+        }
+
+        const replyContext = isReply ? (isThreadReply ? 'thread reply' : 'inline reply') : undefined
+        console.log(`[${timestampIso}]${replyContext && replyTargetId ? ` (${replyContext} → ${replyTargetId})` : ''}`, stored)
     }
 }
 
@@ -68,15 +106,15 @@ function formatCleartext(cleartext: string | Uint8Array, parsed?: ReturnType<typ
 }
 
 function parseChannelMessage(cleartext: string | Uint8Array) {
-    const json = typeof cleartext === 'string' ? cleartext : bin_toString(cleartext)
-    const firstChar = json.trimStart().at(0)
-    if (firstChar !== '{') {
-        return undefined
+    let channelMessage: ChannelMessage
+    if (typeof cleartext === 'string') {
+        channelMessage = fromJsonString(
+          ChannelMessageSchema,
+          cleartext,
+        )
+    } else {
+        channelMessage = fromBinary(ChannelMessageSchema, cleartext)
     }
-    try {
-        return fromJsonString(ChannelMessageSchema, json)
-    } catch (error) {
-        console.warn('Failed to parse channel message cleartext', error)
-        return undefined
-    }
+
+    return channelMessage
 }
