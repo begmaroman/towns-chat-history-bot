@@ -119,7 +119,7 @@ function buildPrompt(params: PromptParams): string {
     return (
         `Summarize the following Towns conversation starting from ${params.start.toISOString()} (${params.timeframeLabel}) in ${scope}.` +
         '\n\nInclude:' +
-        '\n- Begin the summary with a short descriptive title (6 words or fewer) on its own line before any other content' +
+        '\n- Begin the summary title: Summary (paste timeframe here); make it bold' +
         '\n- Key themes and decisions' +
         '\n- Action items with owners (format owners as <@userId>)' +
         '\n- Open questions or follow-ups' +
