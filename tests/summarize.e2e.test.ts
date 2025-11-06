@@ -445,6 +445,31 @@ describe('summarize command', () => {
         expect(message).toContain('Supported timeframe units')
     })
 
+    it('rejects timeframe containing unsupported words even when numbers are present', async () => {
+        const mockBot = createMockBot()
+        registerSummarizeHandler(mockBot.bot)
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['1', 'month'],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-unsupported',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        const message = sentMessages[0]?.message ?? ''
+        expect(message).toContain('I don\'t recognize "month"')
+        expect(message).toContain('Supported timeframe units')
+    })
+
     it('notes fallback when a timeframe was requested but empty', async () => {
         const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
         globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
