@@ -28,21 +28,20 @@ Instructions:
 - Treat the transcript as authoritative; do not invent details.
 - If the content is sparse, state that explicitly.
 
-Respond using this exact template (do not add or remove sections) defined between the triple backticks (send summary without triple backticks):
+Transcript (JSON array for reference):
+{{transcript}}
+{{participantsNote}}
+{{truncationNote}}
 
-\`\`\`
+Respond using this exact template (do not add or remove sections):
+
 Key Themes:
 - ...
 Action Items:
 - <@userId> — ...
 Open Questions:
 - ...
-\`\`\`
-
-Transcript (JSON array for reference):
-{{transcript}}
-{{participantsNote}}
-{{truncationNote}}`
+`
 
 export async function summarizeConversation(params: SummarizeParams): Promise<SummarizeResult> {
     const apiKey = process.env.OPENAI_API_KEY
