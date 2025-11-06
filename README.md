@@ -4,28 +4,21 @@ Instant conversation recaps for busy Towns spaces.
 
 ## Overview
 
-Towns Chat History Bot listens in any channel or thread you invite it to, then delivers on-demand summaries via `/summarize`. Each report highlights decisions, action items with mention-ready `<@userId>` owners, open questions, and sentiment shifts so teams can align quickly without rereading entire conversations.
+Towns Chat History Bot listens in any channel or thread you invite it to, then delivers on-demand summaries via `/summarize`. Each report highlights decisions, action items, and open questions so teams can align quickly without rereading entire conversations.
 
 ## Features
 
 - **Conversation capture**: records messages, edits, and deletions so recaps reflect the latest state.
 - **Slash command summaries**: `/summarize [timeframe]` gathers context for a channel or thread; defaults to the last 24 hours or the whole thread when run inside one.
-- **Structured output**: every summary starts with a short title of six words or fewer, calls out key themes, and ends with `Analyzed N messages.`
-- **Accurate mentions**: owners and participants appear as full `<@userId>` tags ready to paste back into Towns.
+- **Structured output**: every summary starts with a short title of six words or fewer, calls out key themes.
 - **Helpful fallbacks**: if the requested window is quiet, the bot summarizes the freshest messages it has stored instead.
 
 ## Commands
 
 | Command | Description |
 | --- | --- |
-| `/summarize [timeframe]` | Generate a recap for the given duration (examples: `30m`, `24h`, `2d`, `last 3 hours`). In threads, omit the duration to summarize the entire thread. |
+| `/summarize [timeframe]` | Generate a recap for the given duration (examples: `30m`, `24h`, `2d`, `last 3 hours`). |
 | `/help` | Show available commands and timeframe examples. |
-
-## Summary Format
-
-- Leading line: short descriptive title (six words or fewer).
-- Sections covering key themes, action items with `<@userId>` owners, open questions, and notable sentiment signals.
-- Final line: `Analyzed N messages.` with the actual count.
 
 ## Requirements
 
