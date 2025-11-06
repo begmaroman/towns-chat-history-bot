@@ -141,8 +141,16 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
     const lines: string[] = []
     const participants = new Set<string>()
 
+    const labelMap = new Map<string, string>()
+    for (let index = 0; index < messages.length; index++) {
+        const message = messages[index]
+        if (!labelMap.has(message.eventId)) {
+            labelMap.set(message.eventId, makeLabel(index + 1))
+        }
+    }
+
     for (const message of messages) {
-        const line = formatMessageLine(message)
+        const line = formatMessageLine(message, (id) => (id ? labelMap.get(id) : undefined))
         const lineLength = line.length + 1 // account for newline
         if (usedCharacters + lineLength > characterBudget) {
             truncated = true
@@ -161,24 +169,30 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
     }
 }
 
-function formatMessageLine(message: PersistedMessage): string {
+function formatMessageLine(
+    message: PersistedMessage,
+    resolveLabel: (id?: string) => string | undefined,
+): string {
     const timestamp = message.createdAt.toISOString()
     const author = message.userId
     const content = normaliseWhitespace(message.message)
-    const relation = replyDescriptor(message)
+    const relation = replyDescriptor(message, resolveLabel)
     return relation
         ? `[${timestamp}] ${author} ${relation}: ${content}`
         : `[${timestamp}] ${author}: ${content}`
 }
 
-function replyDescriptor(message: PersistedMessage): string | undefined {
+function replyDescriptor(
+    message: PersistedMessage,
+    resolveLabel: (id?: string) => string | undefined,
+): string | undefined {
     const { threadId, replyId } = message
     if (!threadId && !replyId) {
         return undefined
     }
 
-    const threadRef = threadId ? shortenId(threadId) : undefined
-    const replyRef = replyId ? shortenId(replyId) : undefined
+    const threadRef = threadId ? resolveLabel(threadId) ?? shortenId(threadId) : undefined
+    const replyRef = replyId ? resolveLabel(replyId) ?? shortenId(replyId) : undefined
 
     if (threadId && (!replyId || replyId === threadId)) {
         return `(↪ thread:${threadRef})`
@@ -204,6 +218,11 @@ function shortenId(id: string, length = 8): string {
     const prefix = clean.slice(0, Math.ceil((length - 1) / 2))
     const suffix = clean.slice(-Math.floor((length - 1) / 2))
     return `${prefix}…${suffix}`
+}
+
+function makeLabel(index: number): string {
+    const base = String(index).padStart(3, '0')
+    return `m${base}`
 }
 
 function normaliseWhitespace(text: string): string {
