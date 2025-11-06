@@ -72,7 +72,7 @@ export async function summarizeConversation(params: SummarizeParams): Promise<Su
         messages: [
             {
                 role: 'system',
-                content: 'You are an expert meeting summarizer. Write concise, structured summaries that highlight decisions, action items with owners, unresolved questions, sentiment, and important context. Keep tone neutral and professional.',
+                content: 'You are an expert meeting summarizer. Write concise, structured summaries that highlight decisions, action items with owners, unresolved questions, sentiment (if relevant), and important context (if relevant). Keep tone neutral and professional.',
             },
             {
                 role: 'user',
