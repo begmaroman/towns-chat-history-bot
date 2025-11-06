@@ -70,3 +70,4 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 ## TODO: 
 - Improve hard messages limits
 - Update timeframe if there are too many messages and inform user about it
+- Work on AI max character limits
