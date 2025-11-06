@@ -21,6 +21,19 @@ export function registerSummarizeHandler(bot: AppBot): void {
             return
         }
 
+        if (timeframeInput && timeframe) {
+            const twoWeeksMs = 14 * 24 * 60 * 60 * 1000
+            const requestedMs = now.getTime() - timeframe.start.getTime()
+            if (requestedMs > twoWeeksMs) {
+                await handler.sendMessage(
+                    event.channelId,
+                    'Free plan can summarize up to the last 2 weeks only. Upgrade to the paid plan (coming soon) for larger timeframes.',
+                    threadOptions(event),
+                )
+                return
+            }
+        }
+
         if (!timeframe) {
             timeframe = isThread
                 ? {
