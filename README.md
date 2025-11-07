@@ -74,3 +74,4 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 - Monetize the bot
 - Efficient memory usage; introduce persistent storage like SQLite or Redis
 - Improve session management
+- Improve prompt
