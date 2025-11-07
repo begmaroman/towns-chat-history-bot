@@ -72,4 +72,5 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 - Update timeframe if there are too many messages and inform user about it
 - Work on AI max character limits
 - Monetize the bot
-- Efficient memory usage
+- Efficient memory usage; introduce persistent storage like SQLite or Redis
+- Improve session management
