@@ -137,6 +137,8 @@ type Transcript = {
     messageCount: number
     truncated: boolean
     participants: string[]
+    firstTimestamp?: Date
+    lastTimestamp?: Date
 }
 
 function buildPrompt(params: PromptParams): string {
@@ -145,7 +147,8 @@ function buildPrompt(params: PromptParams): string {
         ? '\n\nParticipants (full userIds for mentions):\n' +
           params.transcript.participants.map((id) => `- ${id}`).join('\n')
         : ''
-    const periodLabel = formatSummaryPeriod(params.start, new Date())
+    const effectiveStart = params.transcript.firstTimestamp ?? params.start
+    const periodLabel = formatSummaryPeriod(effectiveStart, new Date())
     const title = formatSummaryTitle(periodLabel)
     const truncationInstruction = params.transcript.truncated
         ? '- Context limit reached; only the most recent portion of the transcript was provided.'
@@ -171,17 +174,24 @@ function buildTranscript(messages: StoredMessage[], maxCharacters?: number): Tra
     let truncated = false
     const participants = new Set<string>()
     const committedEntries: Record<string, unknown>[] = []
+    let firstTimestamp: Date | undefined
+    let lastTimestamp: Date | undefined
 
-    for (const message of messages) {
+    for (let index = messages.length - 1; index >= 0; index--) {
+        const message = messages[index]
         const entry = buildMessageEntry(message)
-        const projectedEntries = [...committedEntries, entry]
+        const projectedEntries = [entry, ...committedEntries]
         const projectedText = JSON.stringify(projectedEntries)
         if (projectedText.length > characterBudget) {
             truncated = true
             break
         }
-        committedEntries.push(entry)
+        committedEntries.unshift(entry)
         participants.add(message.userId)
+        if (!lastTimestamp) {
+            lastTimestamp = message.createdAt
+        }
+        firstTimestamp = message.createdAt
     }
 
     return {
@@ -189,6 +199,8 @@ function buildTranscript(messages: StoredMessage[], maxCharacters?: number): Tra
         messageCount: committedEntries.length,
         truncated,
         participants: Array.from(participants),
+        firstTimestamp,
+        lastTimestamp,
     }
 }
 
