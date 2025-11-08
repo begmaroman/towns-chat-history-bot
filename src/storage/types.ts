@@ -31,12 +31,11 @@ export type ChannelStore = {
 }
 
 export interface MessageStorage {
-    saveMessage(message: SaveMessageInput): void
-    updateMessageContent(channelId: string, message: UpdateMessageInput): void
-    removeMessage(channelId: string, eventId: string): void
-    getMessages(query: MessageQuery): StoredMessage[]
-    getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): StoredMessage[]
-    clearMessages(): void
-    getEarliestTimestamp(channelId: string): number | undefined
-    bulkSaveMessages(channelId: string, messages: StoredMessage[]): void
+    saveMessage(message: SaveMessageInput): Promise<void>
+    updateMessageContent(channelId: string, message: UpdateMessageInput): Promise<void>
+    removeMessage(channelId: string, eventId: string): Promise<void>
+    getMessages(query: MessageQuery): Promise<StoredMessage[]>
+    getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): Promise<StoredMessage[]>
+    getEarliestTimestamp(channelId: string): Promise<number | undefined>
+    bulkSaveMessages(channelId: string, messages: StoredMessage[]): Promise<void>
 }

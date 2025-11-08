@@ -11,7 +11,7 @@ import type {
 export class InMemoryMessageStorage implements MessageStorage {
     private readonly messagesByChannel = new Map<string, ChannelStore>()
 
-    saveMessage(message: SaveMessageInput): void {
+    async saveMessage(message: SaveMessageInput): Promise<void> {
         const channelStore = this.getChannelStore(message.channelId)
         const existing = channelStore.byId.get(message.eventId)
         const stored = cloneInputMessage(message)
@@ -23,7 +23,7 @@ export class InMemoryMessageStorage implements MessageStorage {
         this.updateEarliestTimestamp(channelStore, stored.createdAt.getTime())
     }
 
-    updateMessageContent(channelId: string, message: UpdateMessageInput): void {
+    async updateMessageContent(channelId: string, message: UpdateMessageInput): Promise<void> {
         const channelStore = this.messagesByChannel.get(channelId)
         if (!channelStore) {
             return
@@ -36,7 +36,7 @@ export class InMemoryMessageStorage implements MessageStorage {
         stored.updatedAt = new Date(message.editedAt)
     }
 
-    removeMessage(channelId: string, eventId: string): void {
+    async removeMessage(channelId: string, eventId: string): Promise<void> {
         const channelStore = this.messagesByChannel.get(channelId)
         if (!channelStore) {
             return
@@ -46,7 +46,7 @@ export class InMemoryMessageStorage implements MessageStorage {
         this.recomputeEarliestTimestamp(channelStore)
     }
 
-    getMessages(query: MessageQuery): StoredMessage[] {
+    async getMessages(query: MessageQuery): Promise<StoredMessage[]> {
         const channelStore = this.messagesByChannel.get(query.channelId)
         if (!channelStore) {
             return []
@@ -79,7 +79,7 @@ export class InMemoryMessageStorage implements MessageStorage {
         return results
     }
 
-    getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): StoredMessage[] {
+    async getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): Promise<StoredMessage[]> {
         const channelStore = this.messagesByChannel.get(params.channelId)
         if (!channelStore) {
             return []
@@ -108,16 +108,12 @@ export class InMemoryMessageStorage implements MessageStorage {
         return matches
     }
 
-    clearMessages(): void {
-        this.messagesByChannel.clear()
-    }
-
-    getEarliestTimestamp(channelId: string): number | undefined {
+    async getEarliestTimestamp(channelId: string): Promise<number | undefined> {
         const store = this.messagesByChannel.get(channelId)
         return store?.earliestTimestamp
     }
 
-    bulkSaveMessages(channelId: string, messages: StoredMessage[]): void {
+    async bulkSaveMessages(channelId: string, messages: StoredMessage[]): Promise<void> {
         if (!messages.length) {
             return
         }

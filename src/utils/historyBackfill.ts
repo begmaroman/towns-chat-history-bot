@@ -20,7 +20,7 @@ export async function ensureMessagesForRange(
     start: Date,
 ): Promise<void> {
     const startMs = start.getTime()
-    const currentEarliest = storage.getEarliestTimestamp(channelId)
+    const currentEarliest = await storage.getEarliestTimestamp(channelId)
     if (currentEarliest !== undefined && currentEarliest <= startMs) {
         return
     }
@@ -29,7 +29,7 @@ export async function ensureMessagesForRange(
     const inProgress = inflightBackfills.get(key)
     if (inProgress) {
         await inProgress
-        const updatedEarliest = storage.getEarliestTimestamp(channelId)
+        const updatedEarliest = await storage.getEarliestTimestamp(channelId)
         if (updatedEarliest !== undefined && updatedEarliest <= startMs) {
             return
         }
@@ -41,7 +41,7 @@ export async function ensureMessagesForRange(
             const messages = await transformEvents(bot, channelId, events)
             const filtered = messages.filter((message) => message.userId.toLowerCase() !== bot.botId.toLowerCase())
             if (filtered.length) {
-                storage.bulkSaveMessages(channelId, filtered)
+                await storage.bulkSaveMessages(channelId, filtered)
             }
         } catch (error) {
             console.warn('history backfill skipped', { channelId, error })

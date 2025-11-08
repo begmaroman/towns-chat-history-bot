@@ -65,7 +65,7 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
         const rangeStart = timeframe.start
         await ensureMessagesForRange(bot, storage, event.channelId, rangeStart)
 
-        let messages = storage.getMessages({
+        let messages = await storage.getMessages({
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
             start: rangeStart,
@@ -78,7 +78,7 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
 
         if (!messages.length && isThread && !timeframeInput) {
             await ensureMessagesForRange(bot, storage, event.channelId, new Date(0))
-            messages = storage.getMessages({
+            messages = await storage.getMessages({
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
                 start: new Date(0),
@@ -89,7 +89,7 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
         }
 
         if (!messages.length) {
-            const fallbackMessages = storage.getRecentMessages({
+            const fallbackMessages = await storage.getRecentMessages({
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
                 limit: 400, // TODO: Deal with the limit in a more flexible way

@@ -54,10 +54,11 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 | `OPENAI_SUMMARY_MODEL` | No | Preferred summarization model (defaults to `gpt-4o-mini`). |
 | `OPENAI_MODEL` | No | Fallback model if no summary model is provided. |
 | `PORT` | No | HTTP port for the webhook server (defaults to `5123`). |
+| `REDIS_URL` | No | When set (e.g., `redis://default:password@host:6379/0`), enables Redis-backed message storage instead of the in-memory cache. |
 
 ## Development Notes
 
-- The in-memory transcript store resets when the process restarts. For long-lived history, swap in persistent storage (e.g., SQLite, Redis, or Postgres).
+- By default the bot keeps transcripts in-memory. Provide `REDIS_URL` to persist messages in Redis (recommended for Render or any multi-instance deployment).
 - `/summarize` currently analyzes up to 400 stored messages. Older content is truncated with a note.
 - Need to verify changes? Use `bun test`, `bun run lint`, or `bun run typecheck`.
 
@@ -68,7 +69,6 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 - Monitor OpenAI usage to stay within rate limits and quotas.
 
 ## TODO:
-- Efficient memory usage; introduce persistent storage like SQLite or Redis
 - Update timeframe if there are too many messages and inform user about it
 - Improve session management
 - Improve hard messages limits
