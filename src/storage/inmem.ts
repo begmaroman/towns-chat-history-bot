@@ -1,3 +1,4 @@
+import { MESSAGE_RETENTION_MS, STORAGE_PRUNE_INTERVAL_MS } from './constants'
 import { cloneInputMessage, cloneStoredMessage, findFirstIndex } from './utils'
 import type {
     ChannelStore,
@@ -10,8 +11,9 @@ import type {
 
 export class InMemoryMessageStorage implements MessageStorage {
     private readonly messagesByChannel = new Map<string, ChannelStore>()
+    private readonly lastPruneCheck = new Map<string, number>()
 
-    saveMessage(message: SaveMessageInput): void {
+    async saveMessage(message: SaveMessageInput): Promise<void> {
         const channelStore = this.getChannelStore(message.channelId)
         const existing = channelStore.byId.get(message.eventId)
         const stored = cloneInputMessage(message)
@@ -21,9 +23,10 @@ export class InMemoryMessageStorage implements MessageStorage {
             this.insertOrdered(channelStore, stored)
         }
         this.updateEarliestTimestamp(channelStore, stored.createdAt.getTime())
+        this.maybePruneChannel(message.channelId)
     }
 
-    updateMessageContent(channelId: string, message: UpdateMessageInput): void {
+    async updateMessageContent(channelId: string, message: UpdateMessageInput): Promise<void> {
         const channelStore = this.messagesByChannel.get(channelId)
         if (!channelStore) {
             return
@@ -36,7 +39,7 @@ export class InMemoryMessageStorage implements MessageStorage {
         stored.updatedAt = new Date(message.editedAt)
     }
 
-    removeMessage(channelId: string, eventId: string): void {
+    async removeMessage(channelId: string, eventId: string): Promise<void> {
         const channelStore = this.messagesByChannel.get(channelId)
         if (!channelStore) {
             return
@@ -44,9 +47,10 @@ export class InMemoryMessageStorage implements MessageStorage {
         channelStore.byId.delete(eventId)
         this.removeFromOrdered(channelStore, eventId)
         this.recomputeEarliestTimestamp(channelStore)
+        this.maybePruneChannel(channelId)
     }
 
-    getMessages(query: MessageQuery): StoredMessage[] {
+    async getMessages(query: MessageQuery): Promise<StoredMessage[]> {
         const channelStore = this.messagesByChannel.get(query.channelId)
         if (!channelStore) {
             return []
@@ -79,7 +83,7 @@ export class InMemoryMessageStorage implements MessageStorage {
         return results
     }
 
-    getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): StoredMessage[] {
+    async getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): Promise<StoredMessage[]> {
         const channelStore = this.messagesByChannel.get(params.channelId)
         if (!channelStore) {
             return []
@@ -108,16 +112,12 @@ export class InMemoryMessageStorage implements MessageStorage {
         return matches
     }
 
-    clearMessages(): void {
-        this.messagesByChannel.clear()
-    }
-
-    getEarliestTimestamp(channelId: string): number | undefined {
+    async getEarliestTimestamp(channelId: string): Promise<number | undefined> {
         const store = this.messagesByChannel.get(channelId)
         return store?.earliestTimestamp
     }
 
-    bulkSaveMessages(channelId: string, messages: StoredMessage[]): void {
+    async bulkSaveMessages(channelId: string, messages: StoredMessage[]): Promise<void> {
         if (!messages.length) {
             return
         }
@@ -134,6 +134,11 @@ export class InMemoryMessageStorage implements MessageStorage {
                 this.insertOrdered(channelStore, message)
                 this.updateEarliestTimestamp(channelStore, message.createdAt.getTime())
             })
+        this.maybePruneChannel(channelId)
+    }
+
+    close(): void {
+        // nothing to clean up for in-memory implementation
     }
 
     private insertOrdered(channelStore: ChannelStore, message: StoredMessage): void {
@@ -189,6 +194,38 @@ export class InMemoryMessageStorage implements MessageStorage {
             this.messagesByChannel.set(channelId, channelStore)
         }
         return channelStore
+    }
+
+    private maybePruneChannel(channelId: string): void {
+        const now = Date.now()
+        const last = this.lastPruneCheck.get(channelId) ?? 0
+        if (now - last < STORAGE_PRUNE_INTERVAL_MS) {
+            return
+        }
+        this.lastPruneCheck.set(channelId, now)
+        const cutoffMs = now - MESSAGE_RETENTION_MS
+        const channelStore = this.messagesByChannel.get(channelId)
+        if (!channelStore) {
+            return
+        }
+        let changed = false
+        while (channelStore.orderedIds.length) {
+            const firstId = channelStore.orderedIds[0]
+            const message = firstId ? channelStore.byId.get(firstId) : undefined
+            if (!firstId || !message) {
+                channelStore.orderedIds.shift()
+                continue
+            }
+            if (message.createdAt.getTime() >= cutoffMs) {
+                break
+            }
+            channelStore.byId.delete(firstId)
+            channelStore.orderedIds.shift()
+            changed = true
+        }
+        if (changed) {
+            this.recomputeEarliestTimestamp(channelStore)
+        }
     }
 }
 
