@@ -137,6 +137,10 @@ export class InMemoryMessageStorage implements MessageStorage {
         this.maybePruneChannel(channelId)
     }
 
+    close(): void {
+        // nothing to clean up for in-memory implementation
+    }
+
     private insertOrdered(channelStore: ChannelStore, message: StoredMessage): void {
         const { orderedIds, byId } = channelStore
         const time = message.createdAt.getTime()

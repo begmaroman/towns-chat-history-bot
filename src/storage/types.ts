@@ -38,4 +38,5 @@ export interface MessageStorage {
     getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): Promise<StoredMessage[]>
     getEarliestTimestamp(channelId: string): Promise<number | undefined>
     bulkSaveMessages(channelId: string, messages: StoredMessage[]): Promise<void>
+    close(): void
 }

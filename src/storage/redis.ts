@@ -126,6 +126,12 @@ export class RedisMessageStorage implements MessageStorage {
         this.schedulePrune(channelId)
     }
 
+    close(): void {
+        if (this.client.isOpen) {
+            this.client.destroy()
+        }
+    }
+
     private async fetchMessagesFromScore(
         channelId: string,
         startMs: number,
