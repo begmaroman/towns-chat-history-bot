@@ -71,7 +71,6 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 - Monitor OpenAI usage to stay within rate limits and quotas.
 
 ## TODO:
-- Update timeframe if there are too many messages and inform user about it
 - Improve hard messages limits
 - Work on AI max character limits
 - Improve session management; send key solicitation request if there is no active session for a specific stream
