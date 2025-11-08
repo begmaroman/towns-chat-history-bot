@@ -21,7 +21,7 @@ export type MessageQuery = {
     channelId: string
     start: Date
     threadId?: string
-    limit?: number
+    limit: number
 }
 
 export type ChannelStore = {

@@ -82,13 +82,12 @@ export class RedisMessageStorage implements MessageStorage {
 
     async getMessages(query: MessageQuery): Promise<StoredMessage[]> {
         await this.ensureReady()
-        const limit = query.limit ?? 400
-        return this.fetchMessagesFromScore(query.channelId, query.start.getTime(), limit, query.threadId)
+        return this.fetchMessagesFromScore(query.channelId, query.start.getTime(), query.limit, query.threadId)
     }
 
-    async getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): Promise<StoredMessage[]> {
+    async getRecentMessages(params: { channelId: string; threadId?: string; limit: number }): Promise<StoredMessage[]> {
         await this.ensureReady()
-        const limit = params.limit ?? 100
+        const limit = params.limit
         if (limit <= 0) {
             return []
         }

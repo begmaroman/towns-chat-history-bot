@@ -5,6 +5,8 @@ import { TIMEFRAME_USAGE_HELP, findUnknownTimeframeWords, parseTimeframe } from 
 import { summarizeConversation } from '../utils/summarizer'
 import { ensureMessagesForRange } from '../utils/historyBackfill'
 
+const MAX_MESSAGES = 400 // Maximum messages to summarize, can be adjusted based on performance
+
 export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): void {
     bot.onSlashCommand('summarize', async (handler, event) => {
         const now = new Date()
@@ -79,7 +81,7 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
             start: rangeStart,
-            limit: 400, // TODO: Deal with the limit in a more flexible way
+            limit: MAX_MESSAGES,
         })
 
         let summaryLabel = timeframe.label
@@ -92,7 +94,7 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
                 start: new Date(0),
-                limit: 400, // TODO: Deal with the limit in a more flexible way
+                limit: MAX_MESSAGES,
             })
             summaryLabel = 'complete thread'
             summaryStart = messages[0]?.createdAt ?? rangeStart
@@ -102,7 +104,7 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
             const fallbackMessages = await storage.getRecentMessages({
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
-                limit: 400, // TODO: Deal with the limit in a more flexible way
+                limit: MAX_MESSAGES,
             })
 
             if (!fallbackMessages.length) {
