@@ -34,13 +34,18 @@ Transcript (JSON array for reference):
 {{transcript}}
 {{participantsNote}}
 
+Section guidelines before you write:
+- Key Themes: capture only decisions or impactful changes.
+- Action Items: show the owner plus the next step or due date.
+- Open Questions: include unresolved blockers that still require follow-up.
+
 Respond using this exact template (do not add or remove sections):
 
-Key Themes (only decisions/changes with impact):
+Key Themes:
 - ...
-Action Items (bullets with owner + next step or due date; skip if none):
+Action Items:
 - <@userId> — ...
-Open Questions (skip if none):
+Open Questions:
 - ...
 {{truncationNote}}
 `
