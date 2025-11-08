@@ -34,10 +34,17 @@ export class RedisMessageStorage implements MessageStorage {
 
     async saveMessage(message: SaveMessageInput): Promise<void> {
         await this.ensureReady()
+        if (Date.now() - message.createdAt.getTime() > MESSAGE_RETENTION_MS) {
+            return
+        }
         const stored = cloneInputMessage(message)
         const payload = serializeMessage(stored)
         const pipeline = this.client.multi()
-        pipeline.set(this.eventKey(message.channelId, message.eventId), payload)
+        const ttlMs = remainingTtlMs(stored.createdAt)
+        if (ttlMs === 0) {
+            return
+        }
+        pipeline.set(this.eventKey(message.channelId, message.eventId), payload, { PX: ttlMs })
         pipeline.zAdd(this.orderKey(message.channelId), [{ score: stored.createdAt.getTime(), value: stored.eventId }])
         pipeline.sAdd(this.eventsSetKey(message.channelId), stored.eventId)
         pipeline.sAdd(CHANNEL_INDEX_KEY, message.channelId)
@@ -55,7 +62,12 @@ export class RedisMessageStorage implements MessageStorage {
         const stored = deserializeMessage(raw)
         stored.message = message.message
         stored.updatedAt = new Date(message.editedAt)
-        await this.client.set(eventKey, serializeMessage(stored))
+        const ttlMs = await this.client.pTTL(eventKey)
+        const remainingMs = ttlMs > 0 ? ttlMs : remainingTtlMs(stored.createdAt)
+        if (remainingMs === 0) {
+            return
+        }
+        await this.client.set(eventKey, serializeMessage(stored), { PX: remainingMs })
     }
 
     async removeMessage(channelId: string, eventId: string): Promise<void> {
@@ -102,6 +114,9 @@ export class RedisMessageStorage implements MessageStorage {
         }
         const sorted = [...messages].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
         for (const message of sorted) {
+            if (Date.now() - message.createdAt.getTime() > MESSAGE_RETENTION_MS) {
+                continue
+            }
             const exists = await this.client.exists(this.eventKey(channelId, message.eventId))
             if (exists) {
                 continue
@@ -203,11 +218,8 @@ export class RedisMessageStorage implements MessageStorage {
                 break
             }
             const pipeline = this.client.multi()
-            for (const id of ids) {
-                pipeline.zRem(this.orderKey(channelId), id)
-                pipeline.sRem(this.eventsSetKey(channelId), id)
-                pipeline.del(this.eventKey(channelId, id))
-            }
+            pipeline.zRem(this.orderKey(channelId), ids)
+            pipeline.sRem(this.eventsSetKey(channelId), ids)
             await pipeline.exec()
             hasMore = ids.length >= DEFAULT_BATCH_SIZE
         }
@@ -233,4 +245,8 @@ function deserializeMessage(payload: string): StoredMessage {
 
 function filterThreadMessages(messages: StoredMessage[], threadId: string): StoredMessage[] {
     return messages.filter((message) => message.threadId === threadId || message.eventId === threadId)
+}
+
+function remainingTtlMs(createdAt: Date): number {
+    return Math.max(MESSAGE_RETENTION_MS - (Date.now() - createdAt.getTime()), 0)
 }
