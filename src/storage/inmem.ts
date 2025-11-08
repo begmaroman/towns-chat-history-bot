@@ -1,0 +1,195 @@
+import { cloneInputMessage, cloneStoredMessage, findFirstIndex } from './utils'
+import type {
+    ChannelStore,
+    MessageQuery,
+    MessageStorage,
+    SaveMessageInput,
+    StoredMessage,
+    UpdateMessageInput,
+} from './types'
+
+export class InMemoryMessageStorage implements MessageStorage {
+    private readonly messagesByChannel = new Map<string, ChannelStore>()
+
+    saveMessage(message: SaveMessageInput): void {
+        const channelStore = this.getChannelStore(message.channelId)
+        const existing = channelStore.byId.get(message.eventId)
+        const stored = cloneInputMessage(message)
+
+        channelStore.byId.set(message.eventId, stored)
+        if (!existing) {
+            this.insertOrdered(channelStore, stored)
+        }
+        this.updateEarliestTimestamp(channelStore, stored.createdAt.getTime())
+    }
+
+    updateMessageContent(channelId: string, message: UpdateMessageInput): void {
+        const channelStore = this.messagesByChannel.get(channelId)
+        if (!channelStore) {
+            return
+        }
+        const stored = channelStore.byId.get(message.eventId)
+        if (!stored) {
+            return
+        }
+        stored.message = message.message
+        stored.updatedAt = new Date(message.editedAt)
+    }
+
+    removeMessage(channelId: string, eventId: string): void {
+        const channelStore = this.messagesByChannel.get(channelId)
+        if (!channelStore) {
+            return
+        }
+        channelStore.byId.delete(eventId)
+        this.removeFromOrdered(channelStore, eventId)
+        this.recomputeEarliestTimestamp(channelStore)
+    }
+
+    getMessages(query: MessageQuery): StoredMessage[] {
+        const channelStore = this.messagesByChannel.get(query.channelId)
+        if (!channelStore) {
+            return []
+        }
+
+        const limit = query.limit ?? 400
+        const startTime = query.start.getTime()
+        const threadId = query.threadId
+
+        const results: StoredMessage[] = []
+        const originId = threadId
+
+        const orderedIds = channelStore.orderedIds
+        const startIndex = findFirstIndex(orderedIds, channelStore.byId, startTime)
+
+        for (let i = startIndex; i < orderedIds.length; i++) {
+            const stored = channelStore.byId.get(orderedIds[i])
+            if (!stored) {
+                continue
+            }
+            if (threadId && stored.threadId !== threadId && stored.eventId !== originId) {
+                continue
+            }
+            results.push(cloneStoredMessage(stored))
+            if (results.length >= limit) {
+                break
+            }
+        }
+
+        return results
+    }
+
+    getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): StoredMessage[] {
+        const channelStore = this.messagesByChannel.get(params.channelId)
+        if (!channelStore) {
+            return []
+        }
+
+        const limit = params.limit ?? 100
+        const threadId = params.threadId
+        const originId = threadId
+
+        const matches: StoredMessage[] = []
+        for (const id of channelStore.orderedIds) {
+            const stored = channelStore.byId.get(id)
+            if (!stored) {
+                continue
+            }
+            if (threadId && stored.threadId !== threadId && stored.eventId !== originId) {
+                continue
+            }
+            matches.push(cloneStoredMessage(stored))
+        }
+
+        if (matches.length > limit) {
+            return matches.slice(matches.length - limit)
+        }
+
+        return matches
+    }
+
+    clearMessages(): void {
+        this.messagesByChannel.clear()
+    }
+
+    getEarliestTimestamp(channelId: string): number | undefined {
+        const store = this.messagesByChannel.get(channelId)
+        return store?.earliestTimestamp
+    }
+
+    bulkSaveMessages(channelId: string, messages: StoredMessage[]): void {
+        if (!messages.length) {
+            return
+        }
+
+        const channelStore = this.getChannelStore(channelId)
+        messages
+            .map(cloneInputMessage)
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+            .forEach((message) => {
+                if (channelStore.byId.has(message.eventId)) {
+                    return
+                }
+                channelStore.byId.set(message.eventId, message)
+                this.insertOrdered(channelStore, message)
+                this.updateEarliestTimestamp(channelStore, message.createdAt.getTime())
+            })
+    }
+
+    private insertOrdered(channelStore: ChannelStore, message: StoredMessage): void {
+        const { orderedIds, byId } = channelStore
+        const time = message.createdAt.getTime()
+        let low = 0
+        let high = orderedIds.length
+
+        while (low < high) {
+            const mid = Math.floor((low + high) / 2)
+            const midStored = byId.get(orderedIds[mid])
+            const midTime = midStored ? midStored.createdAt.getTime() : Number.NEGATIVE_INFINITY
+            if (midTime <= time) {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+
+        orderedIds.splice(low, 0, message.eventId)
+    }
+
+    private removeFromOrdered(channelStore: ChannelStore, eventId: string): void {
+        const index = channelStore.orderedIds.findIndex((id) => id === eventId)
+        if (index !== -1) {
+            channelStore.orderedIds.splice(index, 1)
+        }
+    }
+
+    private updateEarliestTimestamp(store: ChannelStore, timestamp: number): void {
+        if (store.earliestTimestamp === undefined || timestamp < store.earliestTimestamp) {
+            store.earliestTimestamp = timestamp
+        }
+    }
+
+    private recomputeEarliestTimestamp(store: ChannelStore): void {
+        const firstId = store.orderedIds[0]
+        if (!firstId) {
+            store.earliestTimestamp = undefined
+            return
+        }
+        const message = store.byId.get(firstId)
+        store.earliestTimestamp = message ? message.createdAt.getTime() : undefined
+    }
+
+    private getChannelStore(channelId: string): ChannelStore {
+        let channelStore = this.messagesByChannel.get(channelId)
+        if (!channelStore) {
+            channelStore = {
+                byId: new Map(),
+                orderedIds: [],
+            }
+            this.messagesByChannel.set(channelId, channelStore)
+        }
+        return channelStore
+    }
+}
+
+export type { MessageStorage as MessageStore }

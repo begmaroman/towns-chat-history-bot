@@ -1,23 +1,26 @@
 import type { AppBot } from '../types'
-import { bulkSaveMessages, getEarliestTimestamp } from '../storage/messageStore'
+import type { MessageStorage } from '../storage/types'
 import { loadEventsSince } from './miniblockLoader'
 import { transformEventsToPersistedMessages } from './eventTransform'
 
 type Overrides = {
     loadEventsSince?: typeof loadEventsSince
     transformEventsToPersistedMessages?: typeof transformEventsToPersistedMessages
-    bulkSaveMessages?: typeof bulkSaveMessages
 }
 
 let loadEvents = loadEventsSince
 let transformEvents = transformEventsToPersistedMessages
-let saveMessages = bulkSaveMessages
 
 const inflightBackfills = new Map<string, Promise<void>>()
 
-export async function ensureMessagesForRange(bot: AppBot, channelId: string, start: Date): Promise<void> {
+export async function ensureMessagesForRange(
+    bot: AppBot,
+    storage: MessageStorage,
+    channelId: string,
+    start: Date,
+): Promise<void> {
     const startMs = start.getTime()
-    const currentEarliest = getEarliestTimestamp(channelId)
+    const currentEarliest = storage.getEarliestTimestamp(channelId)
     if (currentEarliest !== undefined && currentEarliest <= startMs) {
         return
     }
@@ -26,7 +29,7 @@ export async function ensureMessagesForRange(bot: AppBot, channelId: string, sta
     const inProgress = inflightBackfills.get(key)
     if (inProgress) {
         await inProgress
-        const updatedEarliest = getEarliestTimestamp(channelId)
+        const updatedEarliest = storage.getEarliestTimestamp(channelId)
         if (updatedEarliest !== undefined && updatedEarliest <= startMs) {
             return
         }
@@ -38,7 +41,7 @@ export async function ensureMessagesForRange(bot: AppBot, channelId: string, sta
             const messages = await transformEvents(bot, channelId, events)
             const filtered = messages.filter((message) => message.userId.toLowerCase() !== bot.botId.toLowerCase())
             if (filtered.length) {
-                saveMessages(channelId, filtered)
+                storage.bulkSaveMessages(channelId, filtered)
             }
         } catch (error) {
             console.warn('history backfill skipped', { channelId, error })
@@ -56,5 +59,4 @@ export async function ensureMessagesForRange(bot: AppBot, channelId: string, sta
 export function __setHistoryBackfillHooks(overrides?: Overrides): void {
     loadEvents = overrides?.loadEventsSince ?? loadEventsSince
     transformEvents = overrides?.transformEventsToPersistedMessages ?? transformEventsToPersistedMessages
-    saveMessages = overrides?.bulkSaveMessages ?? bulkSaveMessages
 }

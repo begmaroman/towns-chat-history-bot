@@ -9,7 +9,7 @@ import { registerMessageHandler } from '../src/handlers/message'
 import { registerMessageEditHandler } from '../src/handlers/messageEdit'
 import { registerRedactionHandler } from '../src/handlers/redaction'
 import { registerSummarizeHandler } from '../src/handlers/summarize'
-import { clearMessages } from '../src/storage/messageStore'
+import { InMemoryMessageStorage } from '../src/storage/inmem'
 import { __setHistoryBackfillHooks } from '../src/utils/historyBackfill'
 
 type SlashCommandHandler = Parameters<AppBot['onSlashCommand']>[1]
@@ -20,6 +20,7 @@ const SPACE_ID = 'space-1'
 const BOT_ID: `0x${string}` = '0xb07b07b07b07b07b07b07b07b07b07b07b07b07'
 const USER_ID: `0x${string}` = '0x1230000000000000000000000000000000000000'
 const HEX_CHANNEL_ID = CHANNEL_ID
+let storage: InMemoryMessageStorage
 
 type RecordedMessage = {
     channelId: string
@@ -120,7 +121,7 @@ const ORIGINAL_FETCH = globalThis.fetch
 
 describe('summarize command', () => {
     beforeEach(() => {
-        clearMessages()
+        storage = new InMemoryMessageStorage()
         process.env.OPENAI_API_KEY = 'test-api-key'
         __setHistoryBackfillHooks({
             loadEventsSince: async () => [],
@@ -129,7 +130,6 @@ describe('summarize command', () => {
     })
 
     afterEach(() => {
-        clearMessages()
         if (ORIGINAL_FETCH) {
             globalThis.fetch = ORIGINAL_FETCH
         }
@@ -151,10 +151,10 @@ describe('summarize command', () => {
 
         const mockBot = createMockBot()
         registerHelpHandler(mockBot.bot)
-        registerMessageHandler(mockBot.bot)
-        registerMessageEditHandler(mockBot.bot)
-        registerRedactionHandler(mockBot.bot)
-        registerSummarizeHandler(mockBot.bot)
+        registerMessageHandler(mockBot.bot, storage)
+        registerMessageEditHandler(mockBot.bot, storage)
+        registerRedactionHandler(mockBot.bot, storage)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now()
@@ -236,7 +236,7 @@ describe('summarize command', () => {
         }) as typeof fetch
 
         const mockBot = createMockBot()
-        registerSummarizeHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const { handler, sentMessages } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
@@ -285,8 +285,8 @@ describe('summarize command', () => {
         }) as typeof fetch
 
         const mockBot = createMockBot()
-        registerMessageHandler(mockBot.bot)
-        registerSummarizeHandler(mockBot.bot)
+        registerMessageHandler(mockBot.bot, storage)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now()
@@ -349,8 +349,8 @@ describe('summarize command', () => {
         }) as typeof fetch
 
         const mockBot = createMockBot()
-        registerMessageHandler(mockBot.bot)
-        registerSummarizeHandler(mockBot.bot)
+        registerMessageHandler(mockBot.bot, storage)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now()
@@ -398,7 +398,7 @@ describe('summarize command', () => {
         }) as unknown as typeof fetch)
 
         const mockBot = createMockBot()
-        registerSummarizeHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const { handler, sentMessages } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
@@ -422,7 +422,7 @@ describe('summarize command', () => {
 
     it('guides the user when timeframe parsing fails', async () => {
         const mockBot = createMockBot()
-        registerSummarizeHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const { handler, sentMessages } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
@@ -447,7 +447,7 @@ describe('summarize command', () => {
 
     it('rejects timeframe containing unsupported words even when numbers are present', async () => {
         const mockBot = createMockBot()
-        registerSummarizeHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const { handler, sentMessages } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
@@ -483,8 +483,8 @@ describe('summarize command', () => {
         }) as typeof fetch
 
         const mockBot = createMockBot()
-        registerSummarizeHandler(mockBot.bot)
-        registerMessageHandler(mockBot.bot)
+        registerSummarizeHandler(mockBot.bot, storage)
+        registerMessageHandler(mockBot.bot, storage)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now() - 6 * 60 * 60 * 1000
@@ -537,8 +537,8 @@ describe('summarize command', () => {
         }) as typeof fetch
 
         const mockBot = createMockBot()
-        registerMessageHandler(mockBot.bot)
-        registerSummarizeHandler(mockBot.bot)
+        registerMessageHandler(mockBot.bot, storage)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const messageHandler = mockBot.getMessageHandler()
         const baseTime = Date.now()
@@ -613,8 +613,8 @@ describe('summarize command', () => {
         }) as unknown as typeof fetch)
 
         const mockBot = createMockBot()
-        registerMessageHandler(mockBot.bot)
-        registerSummarizeHandler(mockBot.bot)
+        registerMessageHandler(mockBot.bot, storage)
+        registerSummarizeHandler(mockBot.bot, storage)
 
         const messageHandler = mockBot.getMessageHandler()
         await messageHandler({} as BotHandler, {

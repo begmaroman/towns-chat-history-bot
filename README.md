@@ -67,11 +67,12 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 - Secure the webhook endpoint behind HTTPS and ensure Towns can reach the exposed URL.
 - Monitor OpenAI usage to stay within rate limits and quotas.
 
-## TODO: 
-- Improve hard messages limits
-- Update timeframe if there are too many messages and inform user about it
-- Work on AI max character limits
-- Monetize the bot
+## TODO:
 - Efficient memory usage; introduce persistent storage like SQLite or Redis
+- Update timeframe if there are too many messages and inform user about it
 - Improve session management
-- Improve prompt
+- Improve hard messages limits
+- Work on AI max character limits
+- Improve prompt; it gets too long if there are too many messages - make it more concise
+- Send key solicitation request if there is no active session for a specific stream
+- Monetize the bot - tip the bot to get a summary

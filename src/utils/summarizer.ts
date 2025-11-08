@@ -1,7 +1,7 @@
-import type { PersistedMessage } from '../storage/messageStore'
+import type { StoredMessage } from '../storage/types'
 
 export type SummarizeParams = {
-    messages: PersistedMessage[]
+    messages: StoredMessage[]
     timeframeLabel: string
     start: Date
     channelId: string
@@ -152,7 +152,7 @@ function buildPrompt(params: PromptParams): string {
 
 const DEFAULT_CHAR_LIMIT = 50_000
 
-function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): Transcript {
+function buildTranscript(messages: StoredMessage[], maxCharacters?: number): Transcript {
     const characterBudget = maxCharacters ?? DEFAULT_CHAR_LIMIT
     let truncated = false
     const participants = new Set<string>()
@@ -178,7 +178,7 @@ function buildTranscript(messages: PersistedMessage[], maxCharacters?: number): 
     }
 }
 
-function buildMessageEntry(message: PersistedMessage): Record<string, unknown> {
+function buildMessageEntry(message: StoredMessage): Record<string, unknown> {
     const entry: Record<string, unknown> = {
         id: message.eventId,
         timestamp: message.createdAt.toISOString(),
@@ -198,7 +198,7 @@ function buildMessageEntry(message: PersistedMessage): Record<string, unknown> {
     return entry
 }
 
-function buildReplyMetadata(message: PersistedMessage): { thread?: string; message?: string } | undefined {
+function buildReplyMetadata(message: StoredMessage): { thread?: string; message?: string } | undefined {
     const { threadId, replyId } = message
     if (!threadId && !replyId) {
         return undefined

@@ -1,5 +1,5 @@
 import type { ParsedEvent } from '@towns-protocol/sdk'
-import type { PersistedMessage } from '../storage/messageStore'
+import type { StoredMessage } from '../storage/types'
 import type { AppBot } from '../types'
 import { decryptStreamEvent } from './streamDecryption'
 import { parseChannelMessage, formatCleartext } from './messageParsing'
@@ -8,7 +8,7 @@ export async function transformEventToPersistedMessage(
     bot: AppBot,
     streamId: string,
     event: ParsedEvent
-): Promise<PersistedMessage | undefined> {
+): Promise<StoredMessage | undefined> {
     const cleartext = await decryptStreamEvent(bot, streamId, event)
     if (!cleartext) {
         return undefined
@@ -37,8 +37,8 @@ export async function transformEventsToPersistedMessages(
     bot: AppBot,
     streamId: string,
     events: ParsedEvent[]
-): Promise<PersistedMessage[]> {
-    const messages: PersistedMessage[] = []
+): Promise<StoredMessage[]> {
+    const messages: StoredMessage[] = []
 
     for (const event of events) {
         const message = await transformEventToPersistedMessage(bot, streamId, event)

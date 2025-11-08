@@ -1,10 +1,10 @@
 import type { AppBot } from '../types'
-import { getMessages, getRecentMessages } from '../storage/messageStore'
+import type { MessageStorage } from '../storage/types'
 import { TIMEFRAME_USAGE_HELP, findUnknownTimeframeWords, parseTimeframe } from '../utils/timeframe'
 import { summarizeConversation } from '../utils/summarizer'
 import { ensureMessagesForRange } from '../utils/historyBackfill'
 
-export function registerSummarizeHandler(bot: AppBot): void {
+export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): void {
     bot.onSlashCommand('summarize', async (handler, event) => {
         const now = new Date()
         const isThread = Boolean(event.threadId)
@@ -63,9 +63,9 @@ export function registerSummarizeHandler(bot: AppBot): void {
         )
 
         const rangeStart = timeframe.start
-        await ensureMessagesForRange(bot, event.channelId, rangeStart)
+        await ensureMessagesForRange(bot, storage, event.channelId, rangeStart)
 
-        let messages = getMessages({
+        let messages = storage.getMessages({
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
             start: rangeStart,
@@ -77,8 +77,8 @@ export function registerSummarizeHandler(bot: AppBot): void {
         let fallbackNote: string | undefined
 
         if (!messages.length && isThread && !timeframeInput) {
-            await ensureMessagesForRange(bot, event.channelId, new Date(0))
-            messages = getMessages({
+            await ensureMessagesForRange(bot, storage, event.channelId, new Date(0))
+            messages = storage.getMessages({
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
                 start: new Date(0),
@@ -89,7 +89,7 @@ export function registerSummarizeHandler(bot: AppBot): void {
         }
 
         if (!messages.length) {
-            const fallbackMessages = getRecentMessages({
+            const fallbackMessages = storage.getRecentMessages({
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
                 limit: 400, // TODO: Deal with the limit in a more flexible way

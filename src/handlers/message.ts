@@ -1,9 +1,9 @@
 import type { AppBot } from '../types'
-import { saveMessage } from '../storage/messageStore'
+import type { MessageStorage } from '../storage/types'
 
-export function registerMessageHandler(bot: AppBot): void {
+export function registerMessageHandler(bot: AppBot, storage: MessageStorage): void {
     bot.onMessage(async (handler, event) => {
-        saveMessage({
+        storage.saveMessage({
             eventId: event.eventId,
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,

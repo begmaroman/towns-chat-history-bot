@@ -7,16 +7,19 @@ import { registerMessageHandler } from './handlers/message'
 import { registerMessageEditHandler } from './handlers/messageEdit'
 import { registerRedactionHandler } from './handlers/redaction'
 import { registerSummarizeHandler } from './handlers/summarize'
+import { InMemoryMessageStorage } from './storage/inmem'
 
 const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SECRET!, {
     commands,
 })
 
+const messageStorage = new InMemoryMessageStorage()
+
 registerHelpHandler(bot)
-registerSummarizeHandler(bot)
-registerMessageHandler(bot)
-registerMessageEditHandler(bot)
-registerRedactionHandler(bot)
+registerSummarizeHandler(bot, messageStorage)
+registerMessageHandler(bot, messageStorage)
+registerMessageEditHandler(bot, messageStorage)
+registerRedactionHandler(bot, messageStorage)
 
 const { jwtMiddleware, handler } = bot.start()
 

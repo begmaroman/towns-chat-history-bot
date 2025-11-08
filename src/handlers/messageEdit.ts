@@ -1,9 +1,9 @@
 import type { AppBot } from '../types'
-import { updateMessageContent } from '../storage/messageStore'
+import type { MessageStorage } from '../storage/types'
 
-export function registerMessageEditHandler(bot: AppBot): void {
+export function registerMessageEditHandler(bot: AppBot, storage: MessageStorage): void {
     bot.onMessageEdit(async (_handler, event) => {
-        updateMessageContent(event.channelId, {
+        storage.updateMessageContent(event.channelId, {
             eventId: event.refEventId,
             message: event.message,
             editedAt: event.createdAt,

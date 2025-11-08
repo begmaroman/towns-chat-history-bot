@@ -1,8 +1,8 @@
 import type { AppBot } from '../types'
-import { removeMessage } from '../storage/messageStore'
+import type { MessageStorage } from '../storage/types'
 
-export function registerRedactionHandler(bot: AppBot): void {
+export function registerRedactionHandler(bot: AppBot, storage: MessageStorage): void {
     bot.onRedaction(async (_handler, event) => {
-        removeMessage(event.channelId, event.refEventId)
+        storage.removeMessage(event.channelId, event.refEventId)
     })
 }
