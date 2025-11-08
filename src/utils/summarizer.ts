@@ -19,7 +19,12 @@ export type SummarizeResult = {
 const DEFAULT_MODEL = process.env.OPENAI_SUMMARY_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4.1-mini'
 const OPENAI_ENDPOINT = process.env.OPENAI_API_ENDPOINT ?? 'https://api.openai.com/v1/chat/completions'
 
-const SUMMARY_PROMPT_TEMPLATE = `Summarize the following Towns conversation starting from {{startIso}} ({{timeframeLabel}}) in {{scope}}.
+const SUMMARY_PROMPT_TEMPLATE = `Message Title: {{title}}
+Summary Period (approx.): {{periodLabel}}
+Scope: {{scope}}
+Start Timestamp: {{startIso}} (request label: {{timeframeLabel}})
+Messages Provided: {{messageCount}}
+{{truncationInstruction}}
 
 Instructions:
 - Keep tone neutral and professional and keep the total summary short (focus on signal, not chronology).
@@ -39,15 +44,15 @@ Section guidelines before you write:
 - Action Items: show the owner plus the next step or due date.
 - Open Questions: include unresolved blockers that still require follow-up.
 
-Respond using this exact template (do not add or remove sections):
+Respond using this exact template (first line must match the provided title; do not add or remove sections):
 
+{{title}}
 Key Themes:
 - ...
 Action Items:
 - <@userId> — ...
 Open Questions:
 - ...
-{{truncationNote}}
 `
 
 export async function summarizeConversation(params: SummarizeParams): Promise<SummarizeResult> {
@@ -136,21 +141,26 @@ type Transcript = {
 
 function buildPrompt(params: PromptParams): string {
     const scope = params.threadId ? `thread (${params.threadId})` : `channel (${params.channelId})`
-    const truncationNote = params.transcript.truncated
-        ? '\n\nNote: Older messages beyond the character budget were not included.'
-        : ''
     const participantsNote = params.transcript.participants.length
         ? '\n\nParticipants (full userIds for mentions):\n' +
           params.transcript.participants.map((id) => `- ${id}`).join('\n')
+        : ''
+    const periodLabel = formatSummaryPeriod(params.start, new Date())
+    const title = formatSummaryTitle(periodLabel)
+    const truncationInstruction = params.transcript.truncated
+        ? '- Context limit reached; only the most recent portion of the transcript was provided.'
         : ''
 
     return renderTemplate(SUMMARY_PROMPT_TEMPLATE, {
         startIso: params.start.toISOString(),
         timeframeLabel: params.timeframeLabel,
         scope,
-        truncationNote,
         transcript: params.transcript.text,
         participantsNote,
+        title,
+        periodLabel,
+        messageCount: params.transcript.messageCount.toString(),
+        truncationInstruction,
     })
 }
 
@@ -233,4 +243,27 @@ function renderTemplate(template: string, values: Record<string, string>): strin
         const key = rawKey as keyof typeof values
         return values[key] ?? ''
     })
+}
+
+const RELATIVE_PERIODS = [
+    { label: 'day', ms: 24 * 60 * 60 * 1000 },
+    { label: 'hour', ms: 60 * 60 * 1000 },
+    { label: 'minute', ms: 60 * 1000 },
+]
+
+function formatSummaryPeriod(start: Date, end: Date): string {
+    const diffMs = Math.max(0, end.getTime() - start.getTime())
+    for (const period of RELATIVE_PERIODS) {
+        const value = diffMs / period.ms
+        if (value >= 1) {
+            const rounded = Math.max(1, Math.round(value))
+            const suffix = rounded === 1 ? '' : 's'
+            return `last ${rounded} ${period.label}${suffix}`
+        }
+    }
+    return 'last few seconds'
+}
+
+function formatSummaryTitle(periodLabel: string): string {
+    return `**Summary — ${periodLabel}**`
 }

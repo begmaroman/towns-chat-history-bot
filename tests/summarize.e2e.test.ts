@@ -192,9 +192,9 @@ describe('summarize command', () => {
         await slashHandler(handler, slashEvent)
 
         expect(sentMessages).toHaveLength(1)
-        expect(sentMessages[0]?.message).toContain('**Summary (30m)**')
         expect(sentMessages[0]?.message).toContain('Summary content for timeframe.')
         expect(sentMessages[0]?.message).toContain('Analyzed 1 message(s)')
+        expect(sentMessages[0]?.message).not.toContain('Truncation Notice')
         expect(mockFetchCalls).toHaveLength(1)
         const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
         expect(body.messages[1].content).toContain('Discussed release plan.')
@@ -385,7 +385,7 @@ describe('summarize command', () => {
 
         expect(sentMessages).toHaveLength(1)
         const [response] = sentMessages
-        expect(response?.message).toContain('**Summary (latest 1 messages)**')
+        expect(response?.message).not.toContain('**Summary (')
         expect(response?.message).toContain('No activity detected in the past 30m.')
         expect(response?.message).toContain('Fallback summary content.')
         expect(mockFetchCalls).toHaveLength(1)
@@ -541,7 +541,6 @@ describe('summarize command', () => {
 
         expect(sentMessages).toHaveLength(1)
         const [response] = sentMessages
-        expect(response?.message).toContain('latest 1 messages')
         expect(response?.message).toContain('Fallback with timeframe.')
         expect(response?.message).toContain('No activity detected in the past 1h')
         expect(mockFetchCalls).toHaveLength(1)
@@ -624,7 +623,6 @@ describe('summarize command', () => {
 
         expect(sentMessages).toHaveLength(1)
         const [response] = sentMessages
-        expect(response?.message).toContain('**Summary (complete thread)**')
         expect(response?.message).toContain('Thread summary.')
         expect(response?.message).toContain('Analyzed 3 message(s)')
         expect(mockFetchCalls).toHaveLength(1)
