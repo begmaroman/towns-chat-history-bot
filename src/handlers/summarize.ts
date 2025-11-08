@@ -136,9 +136,6 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
             if (fallbackNote) {
                 footerNotes.push(`No activity detected in the past ${fallbackNote}. Summarized the most recent messages I have stored instead.`)
             }
-            if (result.truncated) {
-                footerNotes.push('Truncation Notice: Older messages were omitted to stay within size limits.')
-            }
             footerNotes.push(`Analyzed ${result.usedMessages} message(s).`)
 
             const footer = footerNotes.length ? `_${footerNotes.join(' ')}_` : undefined
