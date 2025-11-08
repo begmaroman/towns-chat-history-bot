@@ -136,17 +136,10 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
             if (fallbackNote) {
                 footerNotes.push(`No activity detected in the past ${fallbackNote}. Summarized the most recent messages I have stored instead.`)
             }
-            footerNotes.push(
-                result.truncated
-                    ? `Analyzed ${result.usedMessages} message(s) (older messages truncated to stay within limits).`
-                    : `Analyzed ${result.usedMessages} message(s).`,
-            )
+            footerNotes.push(`Analyzed ${result.usedMessages} message(s).`)
 
             const footer = footerNotes.length ? `_${footerNotes.join(' ')}_` : undefined
-
-            const response = [`**Summary (${summaryLabel})**`, '\n\n', result.summary, '\n\n', footer]
-                .filter(Boolean)
-                .join('\n')
+            const response = footer ? `${result.summary}\n\n${footer}` : result.summary
 
             await handler.editMessage(
                 event.channelId,
