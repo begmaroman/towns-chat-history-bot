@@ -22,11 +22,12 @@ const OPENAI_ENDPOINT = process.env.OPENAI_API_ENDPOINT ?? 'https://api.openai.c
 const SUMMARY_PROMPT_TEMPLATE = `Summarize the following Towns conversation starting from {{startIso}} ({{timeframeLabel}}) in {{scope}}.
 
 Instructions:
-- Keep tone neutral and professional.
-- Format every user reference as <@userId> using the exact identifier provided.
-- Use the complete userId when constructing <@userId> mentions; do not shorten or truncate.
+- Keep tone neutral and professional and keep the total summary short (focus on signal, not chronology).
+- Capture only discussions that produced decisions, commitments, blockers, or next steps; skip casual chatter or question/answer exchanges that resolved immediately with no follow-up.
+- Merge repetitive updates on the same topic into a single bullet.
+- Format every user reference as <@userId> using the exact identifier provided (never shorten userIds).
 - Treat the transcript as authoritative; do not invent details.
-- If the content is sparse, state that explicitly.
+- If a section has no qualifying content, skip this section.
 
 Transcript (JSON array for reference):
 {{transcript}}
@@ -35,12 +36,13 @@ Transcript (JSON array for reference):
 
 Respond using this exact template (do not add or remove sections):
 
-Key Themes:
+Key Themes (only decisions/changes with impact):
 - ...
-Action Items:
+Action Items (bullets with owner + next step or due date; skip if none):
 - <@userId> — ...
-Open Questions:
+Open Questions (skip if none):
 - ...
+Analyzed Messages: {{messageCount}}
 `
 
 export async function summarizeConversation(params: SummarizeParams): Promise<SummarizeResult> {
