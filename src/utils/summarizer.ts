@@ -28,11 +28,11 @@ Instructions:
 - Format every user reference as <@userId> using the exact identifier provided (never shorten userIds).
 - Treat the transcript as authoritative; do not invent details.
 - If a section has no qualifying content, skip this section.
+- If no discussions meet the decision/action/blocker criteria, respond with "No meaningful conversations captured during this timeframe." instead of the template below.
 
 Transcript (JSON array for reference):
 {{transcript}}
 {{participantsNote}}
-{{truncationNote}}
 
 Respond using this exact template (do not add or remove sections):
 
@@ -42,7 +42,7 @@ Action Items (bullets with owner + next step or due date; skip if none):
 - <@userId> — ...
 Open Questions (skip if none):
 - ...
-Analyzed Messages: {{messageCount}}
+{{truncationNote}}
 `
 
 export async function summarizeConversation(params: SummarizeParams): Promise<SummarizeResult> {
@@ -66,7 +66,6 @@ export async function summarizeConversation(params: SummarizeParams): Promise<Su
         timeframeLabel: params.timeframeLabel,
         channelId: params.channelId,
         threadId: params.threadId,
-        messageCount: transcript.messageCount,
     })
 
     const body = {
@@ -121,7 +120,6 @@ type PromptParams = {
     start: Date
     channelId: string
     threadId?: string
-    messageCount: number
 }
 
 type Transcript = {
@@ -146,7 +144,6 @@ function buildPrompt(params: PromptParams): string {
         timeframeLabel: params.timeframeLabel,
         scope,
         truncationNote,
-        messageCount: params.messageCount.toString(),
         transcript: params.transcript.text,
         participantsNote,
     })
