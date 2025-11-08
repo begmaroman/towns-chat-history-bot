@@ -191,7 +191,8 @@ export class RedisMessageStorage implements MessageStorage {
 
     private async pruneChannel(channelId: string, cutoffMs: number): Promise<void> {
         await this.ensureReady()
-        while (true) {
+        let hasMore = true
+        while (hasMore) {
             const ids = await this.client.zRangeByScore(this.orderKey(channelId), '-inf', cutoffMs, {
                 LIMIT: {
                     offset: 0,
@@ -202,15 +203,13 @@ export class RedisMessageStorage implements MessageStorage {
                 break
             }
             const pipeline = this.client.multi()
-            pipeline.zRem(this.orderKey(channelId), ids)
-            pipeline.sRem(this.eventsSetKey(channelId), ids)
             for (const id of ids) {
+                pipeline.zRem(this.orderKey(channelId), id)
+                pipeline.sRem(this.eventsSetKey(channelId), id)
                 pipeline.del(this.eventKey(channelId, id))
             }
             await pipeline.exec()
-            if (ids.length < DEFAULT_BATCH_SIZE) {
-                break
-            }
+            hasMore = ids.length >= DEFAULT_BATCH_SIZE
         }
     }
 }

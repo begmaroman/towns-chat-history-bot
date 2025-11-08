@@ -66,8 +66,6 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
                   }
         }
 
-        const retentionBoundary = new Date(now.getTime() - MESSAGE_RETENTION_MS)
-
         const pending = await handler.sendMessage(
             event.channelId,
             'Preparing a summary... 📝',
