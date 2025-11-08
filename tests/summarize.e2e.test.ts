@@ -198,6 +198,61 @@ describe('summarize command', () => {
         expect(mockFetchCalls).toHaveLength(1)
         const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
         expect(body.messages[1].content).toContain('Discussed release plan.')
+        expect(body.messages[1].content).toContain('Summary Period (approx.): last 10 minutes')
+    })
+
+    it('labels summary period based on actual observed history when timeframe exceeds requested window', async () => {
+        const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
+        globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+            mockFetchCalls.push({ url, init })
+            return new Response(
+                JSON.stringify({
+                    choices: [{ message: { content: 'Summary for limited history.' } }],
+                }),
+                { status: 200 },
+            )
+        }) as typeof fetch
+
+        const mockBot = createMockBot()
+        registerMessageHandler(mockBot.bot, storage)
+        registerSummarizeHandler(mockBot.bot, storage)
+
+        const messageHandler = mockBot.getMessageHandler()
+        const baseTime = Date.now()
+
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Recent activity only.',
+            eventId: 'recent-msg',
+            userId: USER_ID,
+            createdAt: new Date(baseTime - 60 * 60 * 1000),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['3d'],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(baseTime),
+            eventId: 'slash-actual-period',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        expect(sentMessages[0]?.message).toContain('Summary for limited history.')
+        expect(mockFetchCalls).toHaveLength(1)
+        const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
+        expect(body.messages[1].content).toContain('Summary Period (approx.): last 1 hour')
     })
 
     it('backfills historical messages for hex channel IDs when cache is empty', async () => {
