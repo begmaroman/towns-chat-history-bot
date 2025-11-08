@@ -8,13 +8,15 @@ import type {
     UpdateMessageInput,
 } from './types'
 import { cloneInputMessage, cloneStoredMessage } from './utils'
+import { MESSAGE_RETENTION_MS, STORAGE_PRUNE_INTERVAL_MS } from './constants'
 
 const CHANNEL_INDEX_KEY = 'message-store:channels'
 const DEFAULT_BATCH_SIZE = 200
 
 export class RedisMessageStorage implements MessageStorage {
     private readonly client: RedisClientType
-    private readonly ready: Promise<void>
+    private readonly ready: Promise<any>
+    private readonly lastPruneCheck = new Map<string, number>()
 
     constructor(url: string) {
         this.client = createClient({ url })
@@ -40,6 +42,7 @@ export class RedisMessageStorage implements MessageStorage {
         pipeline.sAdd(this.eventsSetKey(message.channelId), stored.eventId)
         pipeline.sAdd(CHANNEL_INDEX_KEY, message.channelId)
         await pipeline.exec()
+        this.schedulePrune(message.channelId)
     }
 
     async updateMessageContent(channelId: string, message: UpdateMessageInput): Promise<void> {
@@ -62,6 +65,7 @@ export class RedisMessageStorage implements MessageStorage {
         pipeline.zRem(this.orderKey(channelId), eventId)
         pipeline.sRem(this.eventsSetKey(channelId), eventId)
         await pipeline.exec()
+        this.schedulePrune(channelId)
     }
 
     async getMessages(query: MessageQuery): Promise<StoredMessage[]> {
@@ -104,6 +108,7 @@ export class RedisMessageStorage implements MessageStorage {
             }
             await this.saveMessage(message)
         }
+        this.schedulePrune(channelId)
     }
 
     private async fetchMessagesFromScore(
@@ -169,6 +174,44 @@ export class RedisMessageStorage implements MessageStorage {
 
     private eventKey(channelId: string, eventId: string): string {
         return `message-store:${channelId}:event:${eventId}`
+    }
+
+    private schedulePrune(channelId: string): void {
+        const now = Date.now()
+        const last = this.lastPruneCheck.get(channelId) ?? 0
+        if (now - last < STORAGE_PRUNE_INTERVAL_MS) {
+            return
+        }
+        this.lastPruneCheck.set(channelId, now)
+        const cutoff = now - MESSAGE_RETENTION_MS
+        this.pruneChannel(channelId, cutoff).catch((error) => {
+            console.warn('[redis-storage] prune failed', { channelId, error })
+        })
+    }
+
+    private async pruneChannel(channelId: string, cutoffMs: number): Promise<void> {
+        await this.ensureReady()
+        while (true) {
+            const ids = await this.client.zRangeByScore(this.orderKey(channelId), '-inf', cutoffMs, {
+                LIMIT: {
+                    offset: 0,
+                    count: DEFAULT_BATCH_SIZE,
+                },
+            })
+            if (!ids.length) {
+                break
+            }
+            const pipeline = this.client.multi()
+            pipeline.zRem(this.orderKey(channelId), ids)
+            pipeline.sRem(this.eventsSetKey(channelId), ids)
+            for (const id of ids) {
+                pipeline.del(this.eventKey(channelId, id))
+            }
+            await pipeline.exec()
+            if (ids.length < DEFAULT_BATCH_SIZE) {
+                break
+            }
+        }
     }
 }
 

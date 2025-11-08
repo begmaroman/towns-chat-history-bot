@@ -1,5 +1,6 @@
 import type { AppBot } from '../types'
 import type { MessageStorage } from '../storage/types'
+import { MESSAGE_RETENTION_MS } from '../storage/constants'
 import { TIMEFRAME_USAGE_HELP, findUnknownTimeframeWords, parseTimeframe } from '../utils/timeframe'
 import { summarizeConversation } from '../utils/summarizer'
 import { ensureMessagesForRange } from '../utils/historyBackfill'
@@ -32,8 +33,17 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
         }
 
         if (timeframeInput && timeframe) {
-            const twoWeeksMs = 14 * 24 * 60 * 60 * 1000
+            const retentionLimitMs = MESSAGE_RETENTION_MS
             const requestedMs = now.getTime() - timeframe.start.getTime()
+            if (requestedMs > retentionLimitMs) {
+                await handler.sendMessage(
+                    event.channelId,
+                    'History is retained for up to 30 days only. Please request a shorter window.',
+                    threadOptions(event),
+                )
+                return
+            }
+            const twoWeeksMs = 14 * 24 * 60 * 60 * 1000
             if (requestedMs > twoWeeksMs) {
                 await handler.sendMessage(
                     event.channelId,
@@ -55,6 +65,8 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
                       label: '24 hours',
                   }
         }
+
+        const retentionBoundary = new Date(now.getTime() - MESSAGE_RETENTION_MS)
 
         const pending = await handler.sendMessage(
             event.channelId,

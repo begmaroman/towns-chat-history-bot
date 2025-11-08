@@ -4,12 +4,13 @@ import { InMemoryMessageStorage } from '../src/storage/inmem'
 import type { SaveMessageInput } from '../src/storage/types'
 
 const CHANNEL = 'channel-1'
-const BASE_TIME = new Date('2024-01-01T00:00:00.000Z')
 let storage: InMemoryMessageStorage
+let baseTime: Date
 
 describe('message storage service', () => {
     beforeEach(() => {
         storage = new InMemoryMessageStorage()
+        baseTime = new Date()
     })
 
     it('stores messages ordered by timestamp and filters by thread', async () => {
@@ -76,12 +77,12 @@ function makeMessage(overrides: Partial<SaveMessageInput> = {}): SaveMessageInpu
         channelId: overrides.channelId ?? CHANNEL,
         userId: overrides.userId ?? '0xaaa',
         message: overrides.message ?? 'message',
-        createdAt: overrides.createdAt ?? new Date(BASE_TIME),
+        createdAt: overrides.createdAt ?? new Date(baseTime),
         threadId: overrides.threadId,
         replyId: overrides.replyId,
     }
 }
 
 function minutesBefore(mins: number): Date {
-    return new Date(BASE_TIME.getTime() - mins * 60_000)
+    return new Date(baseTime.getTime() - mins * 60_000)
 }

@@ -25,6 +25,7 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 - [Bun](https://bun.sh/) runtime 1.0+.
 - Towns bot credentials (`APP_PRIVATE_DATA`, `JWT_SECRET`).
 - OpenAI API access (`OPENAI_API_KEY`), or a compatible Chat Completions endpoint.
+- Optionally, a Redis instance for persistent message storage (`REDIS_URL`).
 
 ## Setup
 
@@ -59,6 +60,7 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 ## Development Notes
 
 - By default the bot keeps transcripts in-memory. Provide `REDIS_URL` to persist messages in Redis (recommended for Render or any multi-instance deployment).
+- Messages older than 30 days are pruned automatically to keep storage lean.
 - `/summarize` currently analyzes up to 400 stored messages. Older content is truncated with a note.
 - Need to verify changes? Use `bun test`, `bun run lint`, or `bun run typecheck`.
 

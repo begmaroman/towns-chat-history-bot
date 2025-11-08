@@ -470,6 +470,29 @@ describe('summarize command', () => {
         expect(message).toContain('Supported timeframe units')
     })
 
+    it('rejects timeframe requests longer than 30 days', async () => {
+        const mockBot = createMockBot()
+        registerSummarizeHandler(mockBot.bot, storage)
+
+        const { handler, sentMessages } = createActionRecorder()
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: ['31d'],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-31d',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        expect(sentMessages).toHaveLength(1)
+        expect(sentMessages[0]?.message).toContain('History is retained for up to 30 days only')
+    })
+
     it('notes fallback when a timeframe was requested but empty', async () => {
         const mockFetchCalls: Array<{ url: Parameters<typeof fetch>[0]; init?: RequestInit }> = []
         globalThis.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
