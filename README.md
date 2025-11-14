@@ -15,10 +15,10 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `/summarize [timeframe]` | Generate a recap for the given duration (examples: `30m`, `24h`, `2d`, `last 3 hours`). |
-| `/help` | Show available commands and timeframe examples. |
+| Command | Description                                                                                                            |
+| --- |------------------------------------------------------------------------------------------------------------------------|
+| `/summarize [timeframe]` | Generate a recap for the given duration (examples: `30m`, `24h`, `2d`, `last 3 hours`). Default timeframe is 24 hours. |
+| `/help` | Show available commands and timeframe examples.                                                                        |
 
 ## Requirements
 
