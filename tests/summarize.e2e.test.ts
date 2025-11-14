@@ -269,14 +269,9 @@ describe('summarize command', () => {
         await slashHandler(handler, slashEvent)
 
         expect(sentMessages).toHaveLength(1)
-        const tipPrompt = expectTipPrompt(sentMessages)
-
-        await fulfillSummaryRequest(mockBot, handler, tipPrompt)
-
-        expect(sentMessages).toHaveLength(2)
-        expect(sentMessages[1]?.message).toContain('Summary content for timeframe.')
-        expect(sentMessages[1]?.message).toContain('Analyzed 1 message(s)')
-        expect(sentMessages[1]?.message).not.toContain('Truncation Notice')
+        expect(sentMessages[0]?.message).toContain('Summary content for timeframe.')
+        expect(sentMessages[0]?.message).toContain('Analyzed 1 message(s)')
+        expect(sentMessages[0]?.message).not.toContain('Truncation Notice')
         expect(mockFetchCalls).toHaveLength(1)
         const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
         expect(body.messages[1].content).toContain('Discussed release plan.')
@@ -308,7 +303,7 @@ describe('summarize command', () => {
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         await slashHandler(handler, {
             command: 'summarize',
-            args: ['10m'],
+            args: ['36h'],
             userId: USER_ID,
             channelId: CHANNEL_ID,
             spaceId: SPACE_ID,
@@ -356,7 +351,7 @@ describe('summarize command', () => {
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         await slashHandler(handler, {
             command: 'summarize',
-            args: ['15m'],
+            args: ['36h'],
             userId: USER_ID,
             channelId: CHANNEL_ID,
             spaceId: SPACE_ID,
@@ -495,15 +490,10 @@ describe('summarize command', () => {
             threadId: undefined,
         })
 
-        expect(loadCalls).toHaveLength(0)
-        const tipPrompt = expectTipPrompt(sentMessages)
-
-        await fulfillSummaryRequest(mockBot, handler, tipPrompt)
-
         expect(loadCalls).toHaveLength(1)
         expect(loadCalls[0]?.streamId).toBe(HEX_CHANNEL_ID)
-        expect(sentMessages).toHaveLength(2)
-        const response = sentMessages[1]
+        expect(sentMessages).toHaveLength(1)
+        const response = sentMessages[0]
         expect(response?.message).toContain('Summary using backfilled context.')
         expect(mockFetchCalls).toHaveLength(1)
         const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
@@ -576,13 +566,8 @@ describe('summarize command', () => {
         })
 
         expect(loadCalls).toHaveLength(0)
-        const tipPrompt = expectTipPrompt(sentMessages)
-
-        await fulfillSummaryRequest(mockBot, handler, tipPrompt)
-
-        expect(loadCalls).toHaveLength(0)
-        expect(sentMessages).toHaveLength(2)
-        expect(sentMessages[1]?.message).toContain('Summary from cache.')
+        expect(sentMessages).toHaveLength(1)
+        expect(sentMessages[0]?.message).toContain('Summary from cache.')
         expect(mockFetchCalls).toHaveLength(1)
     })
 
@@ -632,11 +617,8 @@ describe('summarize command', () => {
             threadId: undefined,
         })
 
-        const tipPrompt = expectTipPrompt(sentMessages)
-        await fulfillSummaryRequest(mockBot, handler, tipPrompt)
-
-        expect(sentMessages).toHaveLength(2)
-        const response = sentMessages[1]
+        expect(sentMessages).toHaveLength(1)
+        const response = sentMessages[0]
         expect(response?.message).not.toContain('**Summary (')
         expect(response?.message).toContain('No activity detected in the past 30m.')
         expect(response?.message).toContain('Fallback summary content.')
@@ -665,11 +647,8 @@ describe('summarize command', () => {
             threadId: undefined,
         })
 
-        const tipPrompt = expectTipPrompt(sentMessages)
-        await fulfillSummaryRequest(mockBot, handler, tipPrompt)
-
-        expect(sentMessages).toHaveLength(2)
-        expect(sentMessages[1]?.message).toContain("I haven't seen any messages in this channel yet")
+        expect(sentMessages).toHaveLength(1)
+        expect(sentMessages[0]?.message).toContain("I haven't seen any messages in this channel yet")
         globalThis.fetch = mockFetch
     })
 
@@ -723,7 +702,7 @@ describe('summarize command', () => {
         expect(message).toContain('Supported timeframe units')
     })
 
-    it('rejects timeframe requests longer than 30 days', async () => {
+    it('rejects timeframe requests longer than 14 days', async () => {
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
 
@@ -731,7 +710,7 @@ describe('summarize command', () => {
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         await slashHandler(handler, {
             command: 'summarize',
-            args: ['31d'],
+            args: ['15d'],
             userId: USER_ID,
             channelId: CHANNEL_ID,
             spaceId: SPACE_ID,
@@ -743,7 +722,7 @@ describe('summarize command', () => {
         })
 
         expect(sentMessages).toHaveLength(1)
-        expect(sentMessages[0]?.message).toContain('History is retained for up to 30 days only')
+        expect(sentMessages[0]?.message).toContain('History is retained for up to 14 days only')
     })
 
     it('notes fallback when a timeframe was requested but empty', async () => {
@@ -791,11 +770,8 @@ describe('summarize command', () => {
             threadId: undefined,
         })
 
-        const tipPrompt = expectTipPrompt(sentMessages)
-        await fulfillSummaryRequest(mockBot, handler, tipPrompt)
-
-        expect(sentMessages).toHaveLength(2)
-        const response = sentMessages[1]
+        expect(sentMessages).toHaveLength(1)
+        const response = sentMessages[0]
         expect(response?.message).toContain('Fallback with timeframe.')
         expect(response?.message).toContain('No activity detected in the past 1h')
         expect(mockFetchCalls).toHaveLength(1)
@@ -913,7 +889,7 @@ describe('summarize command', () => {
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         await slashHandler(handler, {
             command: 'summarize',
-            args: [],
+            args: ['36h'],
             userId: USER_ID,
             channelId: CHANNEL_ID,
             spaceId: SPACE_ID,
@@ -969,7 +945,7 @@ describe('summarize command', () => {
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         await slashHandler(handler, {
             command: 'summarize',
-            args: [],
+            args: ['36h'],
             userId: USER_ID,
             channelId: CHANNEL_ID,
             spaceId: SPACE_ID,
