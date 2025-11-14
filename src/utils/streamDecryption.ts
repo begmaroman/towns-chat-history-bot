@@ -1,8 +1,8 @@
 import { fromJsonString } from '@bufbuild/protobuf'
-import type { ParsedEvent } from '@towns-protocol/sdk'
+import { ParsedEvent, errorContains } from '@towns-protocol/sdk'
 import { bin_fromHexString } from '@towns-protocol/utils'
 import { GroupEncryptionAlgorithmId, parseGroupEncryptionAlgorithmId } from '@towns-protocol/encryption/dist/olmLib'
-import type { EncryptedData, UserInboxPayload_GroupEncryptionSessions } from '@towns-protocol/proto'
+import {EncryptedData, Err, UserInboxPayload_GroupEncryptionSessions} from '@towns-protocol/proto'
 import { SessionKeysSchema } from '@towns-protocol/proto'
 
 import type { AppBot } from '../types'
@@ -10,6 +10,8 @@ import type { AppBot } from '../types'
 const inflightInitialisations = new Map<string, Promise<void>>()
 const streamSessionCache = new Map<string, number>()
 const STREAM_SESSION_TTL_MS = 180_000 // 3 minutes session cache TTL
+const STREAM_SESSION_NOT_FOUND_MAX_RETRIES = 4
+const STREAM_SESSION_NOT_FOUND_BACKOFF_MS = 1000
 
 export async function decryptStreamEvent(
   bot: AppBot,
@@ -70,13 +72,17 @@ async function ensureStreamKeys(bot: AppBot, streamIdHex: string): Promise<void>
 async function loadStreamSessions(bot: AppBot, streamIdHex: string): Promise<void> {
     const streamIdBytes = bin_fromHexString(streamIdHex)
     const appServiceClient = await bot.client.appServiceClient()
-    const sessionResponse = await appServiceClient.getSession({
-        appId: bin_fromHexString(bot.botId),
-        identifier: {
-            case: 'streamId',
-            value: streamIdBytes,
-        },
-    })
+    const appIdBytes = bin_fromHexString(bot.botId)
+
+    const sessionResponse = await retryStreamSessionLoad(() =>
+        appServiceClient.getSession({
+            appId: appIdBytes,
+            identifier: {
+                case: 'streamId',
+                value: streamIdBytes,
+            },
+        }),
+    )
 
     if (!sessionResponse.groupEncryptionSessions) {
         return
@@ -162,4 +168,23 @@ function isCacheFresh(streamId: string): boolean {
     }
     streamSessionCache.delete(streamId)
     return false
+}
+
+async function retryStreamSessionLoad<T>(operation: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await operation()
+        } catch (error) {
+            const shouldRetry = errorContains(error, Err.NOT_FOUND) && attempt < STREAM_SESSION_NOT_FOUND_MAX_RETRIES
+            if (!shouldRetry) {
+                throw error
+            }
+            const delay = STREAM_SESSION_NOT_FOUND_BACKOFF_MS * 2 ** attempt
+            await delayMs(delay)
+        }
+    }
+}
+
+function delayMs(duration: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, duration))
 }
