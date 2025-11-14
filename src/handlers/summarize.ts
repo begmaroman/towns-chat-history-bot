@@ -140,7 +140,7 @@ function threadOptions(event: { threadId?: string | undefined; eventId: string }
 
 function buildTipRequestMessage(timeframeLabel: string): string {
     return [
-        `Tip this message to unlock a summary covering ${timeframeLabel}.`,
+        `Summaries longer than 24 hours require a tip. Tip this message to unlock a summary covering ${timeframeLabel}.`,
         'Once I receive a tip, I\'ll post the summary right here.',
     ].join(' ')
 }
