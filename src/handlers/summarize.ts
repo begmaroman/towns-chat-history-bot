@@ -1,13 +1,9 @@
 import type { AppBot } from '../types'
-import type { MessageStorage } from '../storage/types'
 import { MESSAGE_RETENTION_MS } from '../storage/constants'
 import { TIMEFRAME_USAGE_HELP, findUnknownTimeframeWords, parseTimeframe } from '../utils/timeframe'
-import { summarizeConversation } from '../utils/summarizer'
-import { ensureMessagesForRange } from '../utils/historyBackfill'
+import type { SummaryService } from '../services/summary'
 
-const MAX_MESSAGES = 400 // Maximum messages to summarize, can be adjusted based on performance
-
-export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): void {
+export function registerSummarizeHandler(bot: AppBot, summaryService: SummaryService): void {
     bot.onSlashCommand('summarize', async (handler, event) => {
         const now = new Date()
         const isThread = Boolean(event.threadId)
@@ -74,79 +70,17 @@ export function registerSummarizeHandler(bot: AppBot, storage: MessageStorage): 
             threadOptions(event),
         )
 
-        const rangeStart = timeframe.start
-        await ensureMessagesForRange(bot, storage, event.channelId, rangeStart)
-
-        let messages = await storage.getMessages({
-            channelId: event.channelId,
-            threadId: event.threadId ?? undefined,
-            start: rangeStart,
-            limit: MAX_MESSAGES,
-        })
-
-        let summaryLabel = timeframe.label
-        let summaryStart = rangeStart
-        let fallbackNote: string | undefined
-
-        if (!messages.length && isThread && !timeframeInput) {
-            await ensureMessagesForRange(bot, storage, event.channelId, new Date(0))
-            messages = await storage.getMessages({
-                channelId: event.channelId,
-                threadId: event.threadId ?? undefined,
-                start: new Date(0),
-                limit: MAX_MESSAGES,
-            })
-            summaryLabel = 'complete thread'
-            summaryStart = messages[0]?.createdAt ?? rangeStart
-        }
-
-        if (!messages.length) {
-            const fallbackMessages = await storage.getRecentMessages({
-                channelId: event.channelId,
-                threadId: event.threadId ?? undefined,
-                limit: MAX_MESSAGES,
-            })
-
-            if (!fallbackMessages.length) {
-                await handler.editMessage(
-                    event.channelId,
-                    pending.eventId,
-                    "I haven't seen any messages in this channel yet. I'll start keeping track now!",
-                    threadOptions(event),
-                )
-                return
-            }
-
-            messages = fallbackMessages
-            summaryLabel = isThread
-                ? `latest ${messages.length} thread messages`
-                : `latest ${messages.length} messages`
-            summaryStart = messages[0]?.createdAt ?? summaryStart
-            fallbackNote = timeframe.label
-        }
-
         try {
-            const result = await summarizeConversation({
-                messages,
-                timeframeLabel: summaryLabel,
-                start: summaryStart,
+            const summary = await summaryService.getSummary({
                 channelId: event.channelId,
                 threadId: event.threadId ?? undefined,
+                timeframe,
             })
-
-            const footerNotes: string[] = []
-            if (fallbackNote) {
-                footerNotes.push(`No activity detected in the past ${fallbackNote}. Summarized the most recent messages I have stored instead.`)
-            }
-            footerNotes.push(`Analyzed ${result.usedMessages} message(s).`)
-
-            const footer = footerNotes.length ? `_${footerNotes.join(' ')}_` : undefined
-            const response = footer ? `${result.summary}\n\n${footer}` : result.summary
 
             await handler.editMessage(
                 event.channelId,
                 pending.eventId,
-                response,
+                summary,
                 threadOptions(event),
             )
         } catch (error) {

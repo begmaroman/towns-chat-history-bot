@@ -2,8 +2,7 @@ import { fromJsonString } from '@bufbuild/protobuf'
 import { ParsedEvent, errorContains } from '@towns-protocol/sdk'
 import { bin_fromHexString } from '@towns-protocol/utils'
 import { GroupEncryptionAlgorithmId, parseGroupEncryptionAlgorithmId } from '@towns-protocol/encryption/dist/olmLib'
-import {EncryptedData, Err, UserInboxPayload_GroupEncryptionSessions} from '@towns-protocol/proto'
-import { SessionKeysSchema } from '@towns-protocol/proto'
+import { EncryptedData, Err, UserInboxPayload_GroupEncryptionSessions, SessionKeysSchema } from '@towns-protocol/proto'
 
 import type { AppBot } from '../types'
 

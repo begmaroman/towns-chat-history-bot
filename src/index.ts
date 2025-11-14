@@ -10,6 +10,7 @@ import { registerSummarizeHandler } from './handlers/summarize'
 import { InMemoryMessageStorage } from './storage/inmem'
 import { RedisMessageStorage } from './storage/redis'
 import type { MessageStorage } from './storage/types'
+import { DefaultSummaryService } from './services/summary'
 
 const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SECRET!, {
     commands,
@@ -20,8 +21,10 @@ const messageStorage: MessageStorage = redisUrl
     ? new RedisMessageStorage(redisUrl)
     : new InMemoryMessageStorage()
 
+const summaryService = new DefaultSummaryService(bot, messageStorage)
+
 registerHelpHandler(bot)
-registerSummarizeHandler(bot, messageStorage)
+registerSummarizeHandler(bot, summaryService)
 registerMessageHandler(bot, messageStorage)
 registerMessageEditHandler(bot, messageStorage)
 registerRedactionHandler(bot, messageStorage)
