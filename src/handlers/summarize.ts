@@ -2,8 +2,11 @@ import type { AppBot } from '../types'
 import { MESSAGE_RETENTION_MS } from '../storage/constants'
 import { TIMEFRAME_USAGE_HELP, findUnknownTimeframeWords, parseTimeframe } from '../utils/timeframe'
 import type { SummaryService } from '../services/summary'
+import type { ParsedTimeframe } from '../utils/timeframe'
 
 export function registerSummarizeHandler(bot: AppBot, summaryService: SummaryService): void {
+    const pendingSummaryRequests = new Map<string, PendingSummaryRequest>()
+
     bot.onSlashCommand('summarize', async (handler, event) => {
         const now = new Date()
         const isThread = Boolean(event.threadId)
@@ -41,15 +44,6 @@ export function registerSummarizeHandler(bot: AppBot, summaryService: SummarySer
                 )
                 return
             }
-            const twoWeeksMs = 14 * 24 * 60 * 60 * 1000
-            if (requestedMs > twoWeeksMs) {
-                await handler.sendMessage(
-                    event.channelId,
-                    'Free plan can summarize up to the last 2 weeks only. Upgrade to the paid plan (coming soon) for larger timeframes.',
-                    threadOptions(event),
-                )
-                return
-            }
         }
 
         if (!timeframe) {
@@ -64,32 +58,56 @@ export function registerSummarizeHandler(bot: AppBot, summaryService: SummarySer
                   }
         }
 
-        const pending = await handler.sendMessage(
+        const replyThreadId = threadOptions(event).threadId
+
+        const paymentPrompt = await handler.sendMessage(
             event.channelId,
-            'Preparing a summary... 📝',
-            threadOptions(event),
+            buildTipRequestMessage(timeframe.label),
+            { threadId: replyThreadId },
+        )
+
+        pendingSummaryRequests.set(paymentPrompt.eventId, {
+            channelId: event.channelId,
+            threadId: event.threadId ?? undefined,
+            replyThreadId,
+            timeframe,
+        })
+    })
+
+    bot.onTip(async (handler, event) => {
+        const pending = pendingSummaryRequests.get(event.messageId)
+        if (!pending) {
+            return
+        }
+
+        pendingSummaryRequests.delete(event.messageId)
+
+        const pendingMessage = await handler.sendMessage(
+            pending.channelId,
+            'Tip received! Preparing a summary... 📝',
+            { threadId: pending.replyThreadId },
         )
 
         try {
             const summary = await summaryService.getSummary({
-                channelId: event.channelId,
-                threadId: event.threadId ?? undefined,
-                timeframe,
+                channelId: pending.channelId,
+                threadId: pending.threadId,
+                timeframe: pending.timeframe,
             })
 
             await handler.editMessage(
-                event.channelId,
-                pending.eventId,
+                pending.channelId,
+                pendingMessage.eventId,
                 summary,
-                threadOptions(event),
+                { threadId: pending.replyThreadId },
             )
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error'
             await handler.editMessage(
-                event.channelId,
-                pending.eventId,
+                pending.channelId,
+                pendingMessage.eventId,
                 `Failed to generate summary: ${message}`,
-                threadOptions(event),
+                { threadId: pending.replyThreadId },
             )
         }
     })
@@ -101,6 +119,20 @@ function threadOptions(event: { threadId?: string | undefined; eventId: string }
     return {
         threadId: event.threadId ?? event.eventId,
     }
+}
+
+function buildTipRequestMessage(timeframeLabel: string): string {
+    return [
+        `Tip this message to unlock a summary covering ${timeframeLabel}.`,
+        'Once I receive a tip, I\'ll post the summary right here.',
+    ].join(' ')
+}
+
+type PendingSummaryRequest = {
+    channelId: string
+    threadId?: string
+    replyThreadId: string
+    timeframe: ParsedTimeframe
 }
 
 function formatWordList(words: string[]): string {
