@@ -2,7 +2,7 @@ import { fromJsonString } from '@bufbuild/protobuf'
 import type { ParsedEvent } from '@towns-protocol/sdk'
 import { bin_fromHexString } from '@towns-protocol/utils'
 import { GroupEncryptionAlgorithmId, parseGroupEncryptionAlgorithmId } from '@towns-protocol/encryption/dist/olmLib'
-import type { EncryptedData, UserInboxPayload_GroupEncryptionSessions } from '@towns-protocol/proto'
+import type {EncryptedData, Envelope, UserInboxPayload_GroupEncryptionSessions} from '@towns-protocol/proto'
 import { SessionKeysSchema } from '@towns-protocol/proto'
 
 import type { AppBot } from '../types'
@@ -10,6 +10,8 @@ import type { AppBot } from '../types'
 const inflightInitialisations = new Map<string, Promise<void>>()
 const streamSessionCache = new Map<string, number>()
 const STREAM_SESSION_TTL_MS = 180_000 // 3 minutes session cache TTL
+const SESSION_FETCH_MAX_ATTEMPTS = 3
+const SESSION_FETCH_RETRY_DELAY_MS = 2_000
 
 export async function decryptStreamEvent(
   bot: AppBot,
@@ -70,19 +72,43 @@ async function ensureStreamKeys(bot: AppBot, streamIdHex: string): Promise<void>
 async function loadStreamSessions(bot: AppBot, streamIdHex: string): Promise<void> {
     const streamIdBytes = bin_fromHexString(streamIdHex)
     const appServiceClient = await bot.client.appServiceClient()
-    const sessionResponse = await appServiceClient.getSession({
-        appId: bin_fromHexString(bot.botId),
-        identifier: {
-            case: 'streamId',
-            value: streamIdBytes,
-        },
-    })
 
-    if (!sessionResponse.groupEncryptionSessions) {
-        return
+    let solicitationSent = false
+    for (let attempt = 0; attempt < SESSION_FETCH_MAX_ATTEMPTS; attempt++) {
+        const sessionResponse = await appServiceClient.getSession({
+            appId: bin_fromHexString(bot.botId),
+            identifier: {
+                case: 'streamId',
+                value: streamIdBytes,
+            },
+        })
+
+        if (sessionResponse.groupEncryptionSessions) {
+            await importSessionsFromEnvelope(bot, streamIdHex, sessionResponse.groupEncryptionSessions)
+            return
+        }
+
+        if (!solicitationSent) {
+            solicitationSent = true
+            await solicitStreamSessions(bot, streamIdHex)
+        }
+
+        if (attempt < SESSION_FETCH_MAX_ATTEMPTS - 1) {
+            await sleep(SESSION_FETCH_RETRY_DELAY_MS * (attempt + 1))
+        }
     }
 
-    const parsedSession = await bot.client.unpackEnvelope(sessionResponse.groupEncryptionSessions)
+    throw new Error(
+        `Unable to load group encryption sessions for stream ${streamIdHex}. Requested new session keys but none were delivered in time.`,
+    )
+}
+
+async function importSessionsFromEnvelope(
+    bot: AppBot,
+    streamIdHex: string,
+    envelope: Envelope,
+): Promise<void> {
+    const parsedSession = await bot.client.unpackEnvelope(envelope)
     if (
         parsedSession.event.payload.case !== 'userInboxPayload' ||
         parsedSession.event.payload.value.content.case !== 'groupEncryptionSessions'
@@ -90,7 +116,6 @@ async function loadStreamSessions(bot: AppBot, streamIdHex: string): Promise<voi
         throw new Error('Unexpected payload in group encryption session response')
     }
 
-    // Delete existing keys first
     await bot.client.crypto.cryptoStore.deleteHybridGroupSessions(streamIdHex)
 
     const sessions = parsedSession.event.payload.value.content.value
@@ -162,4 +187,16 @@ function isCacheFresh(streamId: string): boolean {
     }
     streamSessionCache.delete(streamId)
     return false
+}
+
+async function solicitStreamSessions(bot: AppBot, streamIdHex: string): Promise<void> {
+    try {
+        await bot.client.sendKeySolicitation(streamIdHex, [])
+    } catch (error) {
+        console.error(`Failed to send key solicitation for stream ${streamIdHex}`, error)
+    }
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
 }
