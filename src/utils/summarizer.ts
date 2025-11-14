@@ -151,8 +151,10 @@ function buildPrompt(params: PromptParams): string {
           params.transcript.participants.map((id) => `- ${id}`).join('\n')
         : ''
     const effectiveStart = params.transcript.firstTimestamp ?? params.start
-    const periodLabel = formatSummaryPeriod(effectiveStart, new Date())
-    const title = formatSummaryTitle(periodLabel)
+    const periodLabel = params.transcript.truncated
+        ? formatSummaryPeriod(effectiveStart, new Date())
+        : params.timeframeLabel
+    const title = formatSummaryTitle(params.timeframeLabel)
     const truncationInstruction = params.transcript.truncated
         ? '- Context limit reached; only the most recent portion of the transcript was provided.'
         : ''
@@ -283,6 +285,6 @@ function formatSummaryPeriod(start: Date, end: Date): string {
     return 'last few seconds'
 }
 
-function formatSummaryTitle(periodLabel: string): string {
-    return `**Summary — ${periodLabel}**`
+function formatSummaryTitle(label: string): string {
+    return `**Summary — ${label}**`
 }

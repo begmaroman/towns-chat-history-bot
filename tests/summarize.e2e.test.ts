@@ -275,7 +275,7 @@ describe('summarize command', () => {
         expect(mockFetchCalls).toHaveLength(1)
         const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
         expect(body.messages[1].content).toContain('Discussed release plan.')
-        expect(body.messages[1].content).toContain('Summary Period (approx.): last 10 minutes')
+        expect(body.messages[1].content).toContain('Summary Period (approx.): 30m')
     })
 
     it('waits for a tip before generating summary', async () => {
@@ -433,7 +433,7 @@ describe('summarize command', () => {
         expect(sentMessages[1]?.message).toContain('Summary for limited history.')
         expect(mockFetchCalls).toHaveLength(1)
         const body = JSON.parse(mockFetchCalls[0]?.init?.body as string)
-        expect(body.messages[1].content).toContain('Summary Period (approx.): last 1 hour')
+        expect(body.messages[1].content).toContain('Summary Period (approx.): 3d')
     })
 
     it('backfills historical messages for hex channel IDs when cache is empty', async () => {
