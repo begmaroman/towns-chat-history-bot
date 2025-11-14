@@ -61,7 +61,8 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 
 - By default the bot keeps transcripts in-memory. Provide `REDIS_URL` to persist messages in Redis (recommended for Render or any multi-instance deployment).
 - Messages older than 30 days are pruned automatically to keep storage lean.
-- `/summarize` currently analyzes up to 400 stored messages. Older content is truncated with a note.
+- `/summarize` analyzes up to 400 stored messages. Older content is truncated with a note.
+- Monetization: summaries covering 24 hours or less are free. Requests spanning more than 24 hours require any tip on the prompt message before the bot continues. The bot enforces a hard 14-day history limit regardless of channel history length.
 - Need to verify changes? Use `bun test`, `bun run lint`, or `bun run typecheck`.
 
 ## Deployment Tips
@@ -71,6 +72,5 @@ Towns Chronicle Bot listens in any channel or thread you invite it to, then deli
 - Monitor OpenAI usage to stay within rate limits and quotas.
 
 ## TODO:
-- Monetize the bot - tip the bot to get a summary
 - Improve session management; send key solicitation request if there is no active session for a specific stream
 - Add metrics 
