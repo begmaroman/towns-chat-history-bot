@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it } from 'bun:test'
 
-import { InMemoryMessageStorage } from '../src/storage/inmem'
-import type { SaveMessageInput } from '../src/storage/types'
+import { InMemoryStorage } from '../src/storage/inmem'
+import type { PendingSummaryRequestRecord, SaveMessageInput } from '../src/storage/types'
+import { PENDING_SUMMARY_TTL_MS } from '../src/storage/constants'
 
 const CHANNEL = 'channel-1'
-let storage: InMemoryMessageStorage
+let storage: InMemoryStorage
 let baseTime: Date
 
 describe('message storage service', () => {
     beforeEach(() => {
-        storage = new InMemoryMessageStorage()
+        storage = new InMemoryStorage()
         baseTime = new Date()
     })
 
@@ -35,12 +36,12 @@ describe('message storage service', () => {
             editedAt: new Date(),
         })
 
-        let stored = await storage.getMessages({ channelId: CHANNEL, start: new Date(0) })
+        let stored = await storage.getMessages({ channelId: CHANNEL, start: new Date(0), limit: 10 })
         expect(stored[0]?.message).toBe('edited')
         expect(stored[0]?.updatedAt).toBeInstanceOf(Date)
 
         await storage.removeMessage(CHANNEL, 'update-me')
-        stored = await storage.getMessages({ channelId: CHANNEL, start: new Date(0) })
+        stored = await storage.getMessages({ channelId: CHANNEL, start: new Date(0), limit: 10 })
         expect(stored).toHaveLength(0)
     })
 
@@ -65,9 +66,37 @@ describe('message storage service', () => {
         await storage.bulkSaveMessages(CHANNEL, bulk)
         await storage.bulkSaveMessages(CHANNEL, bulk) // second call should be ignored for duplicates
 
-        const stored = await storage.getMessages({ channelId: CHANNEL, start: new Date(0) })
+        const stored = await storage.getMessages({ channelId: CHANNEL, start: new Date(0), limit: 10 })
         expect(stored).toHaveLength(2)
         expect(stored.map((m) => m.eventId)).toEqual(['bulk-1', 'bulk-2'])
+})
+
+    it('stores pending summary requests with TTL', async () => {
+        const request: PendingSummaryRequestRecord = {
+            promptMessageId: 'prompt-1',
+            channelId: CHANNEL,
+            threadId: undefined,
+            replyThreadId: 'thread-1',
+            timeframe: { start: new Date(), label: '10 minutes' },
+            requestedBy: '0xbbb',
+        }
+
+        const originalNow = Date.now
+        const baseNow = Date.now()
+        try {
+            Date.now = () => baseNow
+            await storage.savePendingSummaryRequest(request)
+
+            const stored = await storage.getPendingSummaryRequest('prompt-1')
+            expect(stored).toBeDefined()
+            expect(stored?.timeframe.label).toBe('10 minutes')
+
+            Date.now = () => baseNow + PENDING_SUMMARY_TTL_MS + 1_000
+            const expired = await storage.getPendingSummaryRequest('prompt-1')
+            expect(expired).toBeUndefined()
+        } finally {
+            Date.now = originalNow
+        }
     })
 })
 

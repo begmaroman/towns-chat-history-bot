@@ -1,3 +1,5 @@
+import type { ParsedTimeframe } from '../utils/timeframe'
+
 export type StoredMessage = {
     eventId: string
     channelId: string
@@ -30,7 +32,16 @@ export type ChannelStore = {
     earliestTimestamp?: number
 }
 
-export interface MessageStorage {
+export type PendingSummaryRequestRecord = {
+    promptMessageId: string
+    channelId: string
+    threadId?: string
+    replyThreadId: string
+    timeframe: ParsedTimeframe
+    requestedBy: string
+}
+
+export interface Storage {
     saveMessage(message: SaveMessageInput): Promise<void>
     updateMessageContent(channelId: string, message: UpdateMessageInput): Promise<void>
     removeMessage(channelId: string, eventId: string): Promise<void>
@@ -38,5 +49,8 @@ export interface MessageStorage {
     getRecentMessages(params: { channelId: string; threadId?: string; limit?: number }): Promise<StoredMessage[]>
     getEarliestTimestamp(channelId: string): Promise<number | undefined>
     bulkSaveMessages(channelId: string, messages: StoredMessage[]): Promise<void>
+    savePendingSummaryRequest(request: PendingSummaryRequestRecord): Promise<void>
+    getPendingSummaryRequest(promptMessageId: string): Promise<PendingSummaryRequestRecord | undefined>
+    deletePendingSummaryRequest(promptMessageId: string): Promise<void>
     close(): void
 }

@@ -35,6 +35,7 @@ Instructions:
 - If a section has no qualifying content, skip this section.
 - If no discussions meet the decision/action/blocker criteria, respond with "No meaningful conversations captured during this timeframe." instead of the template below.
 - If a truncation notice line is provided under the title, include it verbatim before the sections.
+- The summary title must be the first line, followed by a newline before any other text (including fallback sentences such as "No meaningful conversations captured during this timeframe.").
 
 Transcript (JSON array for reference):
 {{transcript}}
@@ -47,7 +48,8 @@ Section guidelines before you write:
 
 Respond using this exact template (first line must match the provided title; do not add or remove sections):
 
-{{title}}{{truncationNoteLine}}
+{{title}}
+{{truncationNoteLine}}
 Key Themes:
 - ...
 Action Items:
@@ -149,13 +151,15 @@ function buildPrompt(params: PromptParams): string {
           params.transcript.participants.map((id) => `- ${id}`).join('\n')
         : ''
     const effectiveStart = params.transcript.firstTimestamp ?? params.start
-    const periodLabel = formatSummaryPeriod(effectiveStart, new Date())
-    const title = formatSummaryTitle(periodLabel)
+    const periodLabel = params.transcript.truncated
+        ? formatSummaryPeriod(effectiveStart, new Date())
+        : params.timeframeLabel
+    const title = formatSummaryTitle(params.timeframeLabel)
     const truncationInstruction = params.transcript.truncated
         ? '- Context limit reached; only the most recent portion of the transcript was provided.'
         : ''
     const truncationNoteLine = params.transcript.truncated
-        ? '\n_Truncation Notice: Only the most recent portion of the transcript was available due to size limits._'
+        ? '_Truncation Notice: Only the most recent portion of the transcript was available due to size limits._'
         : ''
 
     return renderTemplate(SUMMARY_PROMPT_TEMPLATE, {
@@ -281,6 +285,6 @@ function formatSummaryPeriod(start: Date, end: Date): string {
     return 'last few seconds'
 }
 
-function formatSummaryTitle(periodLabel: string): string {
-    return `**Summary — ${periodLabel}**`
+function formatSummaryTitle(label: string): string {
+    return `**Summary — ${label}**`
 }

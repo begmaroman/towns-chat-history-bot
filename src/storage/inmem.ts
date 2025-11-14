@@ -1,17 +1,24 @@
-import { MESSAGE_RETENTION_MS, STORAGE_PRUNE_INTERVAL_MS } from './constants'
-import { cloneInputMessage, cloneStoredMessage, findFirstIndex } from './utils'
+import { MESSAGE_RETENTION_MS, PENDING_SUMMARY_TTL_MS, STORAGE_PRUNE_INTERVAL_MS } from './constants'
+import { cloneInputMessage, clonePendingSummaryRequest, cloneStoredMessage, findFirstIndex } from './utils'
 import type {
     ChannelStore,
     MessageQuery,
-    MessageStorage,
+    PendingSummaryRequestRecord,
     SaveMessageInput,
+    Storage,
     StoredMessage,
     UpdateMessageInput,
 } from './types'
 
-export class InMemoryMessageStorage implements MessageStorage {
+type PendingEntry = {
+    request: PendingSummaryRequestRecord
+    expiresAt: number
+}
+
+export class InMemoryStorage implements Storage {
     private readonly messagesByChannel = new Map<string, ChannelStore>()
     private readonly lastPruneCheck = new Map<string, number>()
+    private readonly pendingSummaryRequests = new Map<string, PendingEntry>()
 
     async saveMessage(message: SaveMessageInput): Promise<void> {
         const channelStore = this.getChannelStore(message.channelId)
@@ -56,7 +63,7 @@ export class InMemoryMessageStorage implements MessageStorage {
             return []
         }
 
-        const limit = query.limit ?? 400
+        const limit = query.limit
         const startTime = query.start.getTime()
         const threadId = query.threadId
 
@@ -135,6 +142,27 @@ export class InMemoryMessageStorage implements MessageStorage {
                 this.updateEarliestTimestamp(channelStore, message.createdAt.getTime())
             })
         this.maybePruneChannel(channelId)
+    }
+
+    async savePendingSummaryRequest(request: PendingSummaryRequestRecord): Promise<void> {
+        this.pruneExpiredPendingRequests()
+        this.pendingSummaryRequests.set(request.promptMessageId, {
+            request: clonePendingSummaryRequest(request),
+            expiresAt: Date.now() + PENDING_SUMMARY_TTL_MS,
+        })
+    }
+
+    async getPendingSummaryRequest(promptMessageId: string): Promise<PendingSummaryRequestRecord | undefined> {
+        this.pruneExpiredPendingRequests()
+        const entry = this.pendingSummaryRequests.get(promptMessageId)
+        if (!entry) {
+            return undefined
+        }
+        return clonePendingSummaryRequest(entry.request)
+    }
+
+    async deletePendingSummaryRequest(promptMessageId: string): Promise<void> {
+        this.pendingSummaryRequests.delete(promptMessageId)
     }
 
     close(): void {
@@ -227,6 +255,13 @@ export class InMemoryMessageStorage implements MessageStorage {
             this.recomputeEarliestTimestamp(channelStore)
         }
     }
-}
 
-export type { MessageStorage as MessageStore }
+    private pruneExpiredPendingRequests(): void {
+        const now = Date.now()
+        for (const [id, entry] of this.pendingSummaryRequests.entries()) {
+            if (entry.expiresAt <= now) {
+                this.pendingSummaryRequests.delete(id)
+            }
+        }
+    }
+}

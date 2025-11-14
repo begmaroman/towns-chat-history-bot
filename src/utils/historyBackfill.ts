@@ -1,5 +1,5 @@
 import type { AppBot } from '../types'
-import type { MessageStorage } from '../storage/types'
+import type { Storage } from '../storage/types'
 import { MESSAGE_RETENTION_MS } from '../storage/constants'
 import { loadEventsSince } from './miniblockLoader'
 import { transformEventsToPersistedMessages } from './eventTransform'
@@ -16,7 +16,7 @@ const inflightBackfills = new Map<string, Promise<void>>()
 
 export async function ensureMessagesForRange(
     bot: AppBot,
-    storage: MessageStorage,
+    storage: Storage,
     channelId: string,
     start: Date,
 ): Promise<void> {
