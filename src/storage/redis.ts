@@ -2,18 +2,20 @@ import { createClient, type RedisClientType } from 'redis'
 
 import type {
     MessageQuery,
-    MessageStorage,
+    PendingSummaryRequestRecord,
     SaveMessageInput,
+    Storage,
     StoredMessage,
     UpdateMessageInput,
 } from './types'
-import { cloneInputMessage, cloneStoredMessage } from './utils'
-import { MESSAGE_RETENTION_MS, STORAGE_PRUNE_INTERVAL_MS } from './constants'
+import { cloneInputMessage, clonePendingSummaryRequest, cloneStoredMessage } from './utils'
+import { MESSAGE_RETENTION_MS, PENDING_SUMMARY_TTL_MS, STORAGE_PRUNE_INTERVAL_MS } from './constants'
 
 const CHANNEL_INDEX_KEY = 'message-store:channels'
+const PENDING_SUMMARY_KEY_PREFIX = 'summary-pending'
 const DEFAULT_BATCH_SIZE = 200
 
-export class RedisMessageStorage implements MessageStorage {
+export class RedisStorage implements Storage {
     private readonly client: RedisClientType
     private readonly ready: Promise<any>
     private readonly lastPruneCheck = new Map<string, number>()
@@ -131,6 +133,29 @@ export class RedisMessageStorage implements MessageStorage {
         }
     }
 
+    async savePendingSummaryRequest(request: PendingSummaryRequestRecord): Promise<void> {
+        await this.ensureReady()
+        await this.client.set(
+            this.pendingRequestKey(request.promptMessageId),
+            serializePendingSummaryRequest(request),
+            { PX: PENDING_SUMMARY_TTL_MS },
+        )
+    }
+
+    async getPendingSummaryRequest(promptMessageId: string): Promise<PendingSummaryRequestRecord | undefined> {
+        await this.ensureReady()
+        const raw = await this.client.get(this.pendingRequestKey(promptMessageId))
+        if (!raw) {
+            return undefined
+        }
+        return deserializePendingSummaryRequest(raw)
+    }
+
+    async deletePendingSummaryRequest(promptMessageId: string): Promise<void> {
+        await this.ensureReady()
+        await this.client.del(this.pendingRequestKey(promptMessageId))
+    }
+
     private async fetchMessagesFromScore(
         channelId: string,
         startMs: number,
@@ -196,6 +221,10 @@ export class RedisMessageStorage implements MessageStorage {
         return `message-store:${channelId}:event:${eventId}`
     }
 
+    private pendingRequestKey(promptMessageId: string): string {
+        return `${PENDING_SUMMARY_KEY_PREFIX}:${promptMessageId}`
+    }
+
     private schedulePrune(channelId: string): void {
         const now = Date.now()
         const last = this.lastPruneCheck.get(channelId) ?? 0
@@ -254,4 +283,28 @@ function filterThreadMessages(messages: StoredMessage[], threadId: string): Stor
 
 function remainingTtlMs(createdAt: Date): number {
     return Math.max(MESSAGE_RETENTION_MS - (Date.now() - createdAt.getTime()), 0)
+}
+
+function serializePendingSummaryRequest(request: PendingSummaryRequestRecord): string {
+    const payload = clonePendingSummaryRequest(request)
+    return JSON.stringify({
+        ...payload,
+        timeframe: {
+            ...payload.timeframe,
+            start: payload.timeframe.start.toISOString(),
+        },
+    })
+}
+
+function deserializePendingSummaryRequest(payload: string): PendingSummaryRequestRecord {
+    const parsed = JSON.parse(payload) as PendingSummaryRequestRecord & {
+        timeframe: { start: string }
+    }
+    return {
+        ...parsed,
+        timeframe: {
+            ...parsed.timeframe,
+            start: new Date(parsed.timeframe.start),
+        },
+    }
 }

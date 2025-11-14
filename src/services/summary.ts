@@ -1,5 +1,5 @@
 import type { AppBot } from '../types'
-import type { MessageStorage } from '../storage/types'
+import type { Storage } from '../storage/types'
 import { summarizeConversation } from '../utils/summarizer'
 import type { ParsedTimeframe } from '../utils/timeframe'
 import { ensureMessagesForRange } from '../utils/historyBackfill'
@@ -17,7 +17,7 @@ export interface SummaryService {
 const DEFAULT_MAX_MESSAGES = 400
 
 export class DefaultSummaryService implements SummaryService {
-    constructor(private readonly bot: AppBot, private readonly storage: MessageStorage, private readonly options?: {
+    constructor(private readonly bot: AppBot, private readonly storage: Storage, private readonly options?: {
         maxMessages?: number
     }) {}
 

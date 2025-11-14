@@ -1,12 +1,15 @@
+import type { BotHandler } from '@towns-protocol/bot'
+
 import type { AppBot } from '../types'
 import { MESSAGE_RETENTION_MS } from '../storage/constants'
 import { TIMEFRAME_USAGE_HELP, findUnknownTimeframeWords, parseTimeframe } from '../utils/timeframe'
 import type { SummaryService } from '../services/summary'
-import type { ParsedTimeframe } from '../utils/timeframe'
+import type { Storage } from '../storage/types'
 
-export function registerSummarizeHandler(bot: AppBot, summaryService: SummaryService): void {
-    const pendingSummaryRequests = new Map<string, PendingSummaryRequest>()
+type TipEventPayload = Parameters<Parameters<AppBot['onTip']>[0]>[1]
 
+export function registerSummarizeHandler(bot: AppBot, storage: Storage, summaryService: SummaryService): void {
+    
     bot.onSlashCommand('summarize', async (handler, event) => {
         const now = new Date()
         const isThread = Boolean(event.threadId)
@@ -66,21 +69,23 @@ export function registerSummarizeHandler(bot: AppBot, summaryService: SummarySer
             { threadId: replyThreadId },
         )
 
-        pendingSummaryRequests.set(paymentPrompt.eventId, {
+        await storage.savePendingSummaryRequest({
+            promptMessageId: paymentPrompt.eventId,
             channelId: event.channelId,
             threadId: event.threadId ?? undefined,
             replyThreadId,
             timeframe,
+            requestedBy: event.userId,
         })
     })
 
-    bot.onTip(async (handler, event) => {
-        const pending = pendingSummaryRequests.get(event.messageId)
+    bot.onTip(async (handler, event: TipEventPayload) => {
+        const pending = await storage.getPendingSummaryRequest(event.messageId)
         if (!pending) {
             return
         }
 
-        pendingSummaryRequests.delete(event.messageId)
+        await storage.deletePendingSummaryRequest(event.messageId)
 
         const pendingMessage = await handler.sendMessage(
             pending.channelId,
@@ -103,12 +108,19 @@ export function registerSummarizeHandler(bot: AppBot, summaryService: SummarySer
             )
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error'
+            const refund = await refundTip(handler, event)
+            const refundNote = refund.ok
+                ? 'Your tip has been refunded.'
+                : `Tip refund failed: ${refund.error}`
             await handler.editMessage(
                 pending.channelId,
                 pendingMessage.eventId,
-                `Failed to generate summary: ${message}`,
+                `Failed to generate summary: ${message} ${refundNote}`,
                 { threadId: pending.replyThreadId },
             )
+
+            // Allow users to retry by tipping again
+            await storage.savePendingSummaryRequest(pending)
         }
     })
 }
@@ -128,13 +140,6 @@ function buildTipRequestMessage(timeframeLabel: string): string {
     ].join(' ')
 }
 
-type PendingSummaryRequest = {
-    channelId: string
-    threadId?: string
-    replyThreadId: string
-    timeframe: ParsedTimeframe
-}
-
 function formatWordList(words: string[]): string {
     if (words.length === 1) {
         return `"${words[0]}"`
@@ -148,4 +153,20 @@ function formatWordList(words: string[]): string {
         .map((word) => `"${word}"`)
         .join(', ')
     return `${initial}, and "${last}"`
+}
+
+async function refundTip(handler: BotHandler, event: TipEventPayload): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+        await handler.sendTip({
+            userId: event.userId,
+            channelId: event.channelId,
+            messageId: event.messageId,
+            amount: event.amount,
+            currency: event.currency,
+        })
+        return { ok: true }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return { ok: false, error: message }
+    }
 }

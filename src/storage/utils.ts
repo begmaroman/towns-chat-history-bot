@@ -1,4 +1,4 @@
-import type { SaveMessageInput, StoredMessage } from './types'
+import type { PendingSummaryRequestRecord, SaveMessageInput, StoredMessage } from './types'
 
 export function cloneStoredMessage(message: StoredMessage): StoredMessage {
     return {
@@ -13,6 +13,16 @@ export function cloneInputMessage(message: SaveMessageInput | StoredMessage): St
         ...message,
         createdAt: new Date(message.createdAt),
         updatedAt: 'updatedAt' in message && message.updatedAt ? new Date(message.updatedAt) : undefined,
+    }
+}
+
+export function clonePendingSummaryRequest(request: PendingSummaryRequestRecord): PendingSummaryRequestRecord {
+    return {
+        ...request,
+        timeframe: {
+            ...request.timeframe,
+            start: new Date(request.timeframe.start),
+        },
     }
 }
 

@@ -7,9 +7,9 @@ import { registerMessageHandler } from './handlers/message'
 import { registerMessageEditHandler } from './handlers/messageEdit'
 import { registerRedactionHandler } from './handlers/redaction'
 import { registerSummarizeHandler } from './handlers/summarize'
-import { InMemoryMessageStorage } from './storage/inmem'
-import { RedisMessageStorage } from './storage/redis'
-import type { MessageStorage } from './storage/types'
+import { InMemoryStorage } from './storage/inmem'
+import { RedisStorage } from './storage/redis'
+import type { Storage } from './storage/types'
 import { DefaultSummaryService } from './services/summary'
 
 const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SECRET!, {
@@ -17,17 +17,15 @@ const bot = await makeTownsBot(process.env.APP_PRIVATE_DATA!, process.env.JWT_SE
 })
 
 const redisUrl = process.env.REDIS_URL?.trim()
-const messageStorage: MessageStorage = redisUrl
-    ? new RedisMessageStorage(redisUrl)
-    : new InMemoryMessageStorage()
+const storage: Storage = redisUrl ? new RedisStorage(redisUrl) : new InMemoryStorage()
 
-const summaryService = new DefaultSummaryService(bot, messageStorage)
+const summaryService = new DefaultSummaryService(bot, storage)
 
 registerHelpHandler(bot)
-registerSummarizeHandler(bot, summaryService)
-registerMessageHandler(bot, messageStorage)
-registerMessageEditHandler(bot, messageStorage)
-registerRedactionHandler(bot, messageStorage)
+registerSummarizeHandler(bot, storage, summaryService)
+registerMessageHandler(bot, storage)
+registerMessageEditHandler(bot, storage)
+registerRedactionHandler(bot, storage)
 
 const { jwtMiddleware, handler } = bot.start()
 

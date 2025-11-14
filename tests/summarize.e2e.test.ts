@@ -8,7 +8,7 @@ import { registerHelpHandler } from '../src/handlers/help'
 import { registerMessageHandler } from '../src/handlers/message'
 import { registerMessageEditHandler } from '../src/handlers/messageEdit'
 import { registerRedactionHandler } from '../src/handlers/redaction'
-import { InMemoryMessageStorage } from '../src/storage/inmem'
+import { InMemoryStorage } from '../src/storage/inmem'
 import { __setHistoryBackfillHooks } from '../src/utils/historyBackfill'
 import { registerSummarizeHandler } from '../src/handlers/summarize'
 import { DefaultSummaryService } from '../src/services/summary'
@@ -23,7 +23,7 @@ const SPACE_ID = 'space-1'
 const BOT_ID: `0x${string}` = '0xb07b07b07b07b07b07b07b07b07b07b07b07b07'
 const USER_ID: `0x${string}` = '0x1230000000000000000000000000000000000000'
 const HEX_CHANNEL_ID = CHANNEL_ID
-let storage: InMemoryMessageStorage
+let storage: InMemoryStorage
 
 type RecordedMessage = {
     channelId: string
@@ -97,9 +97,13 @@ function createMockBot() {
 
 function createActionRecorder() {
     const sentMessages: RecordedMessage[] = []
+    const messageIds: string[] = []
+    const tipCalls: Array<Parameters<BotHandler['sendTip']>[0]> = []
+    let nextTipError: Error | undefined
     let counter = 0
 
     const upsertMessage = (entry: RecordedMessage) => {
+        messageIds.push(entry.eventId)
         const index = sentMessages.findIndex((m) => m.eventId === entry.eventId)
         if (index === -1) {
             sentMessages.push(entry)
@@ -123,21 +127,41 @@ function createActionRecorder() {
             upsertMessage({ channelId, message, opts, eventId })
             return { eventId, prevMiniblockHash: new Uint8Array() }
         },
-    } as unknown as BotHandler
+        async sendTip(params: Parameters<BotHandler['sendTip']>[0]) {
+            tipCalls.push(params)
+            if (nextTipError) {
+                const error = nextTipError
+                nextTipError = undefined
+                throw error
+            }
+            return { txHash: `tx-${tipCalls.length}`, eventId: `refund-${tipCalls.length}` }
+        },
+    } as BotHandler
 
     return {
         handler,
         sentMessages,
+        messageIds,
+        tipCalls,
+        failNextTipWith(error: Error) {
+            nextTipError = error
+        },
     }
 }
 
-function registerTestHandlers(bot: AppBot, storage: InMemoryMessageStorage): void {
+function registerTestHandlers(bot: AppBot, storage: InMemoryStorage): void {
     registerHelpHandler(bot)
     registerMessageHandler(bot, storage)
     registerMessageEditHandler(bot, storage)
     registerRedactionHandler(bot, storage)
     const summaryService = new DefaultSummaryService(bot, storage)
-    registerSummarizeHandler(bot, summaryService)
+    registerSummarizeHandler(bot, storage, summaryService)
+}
+
+function rejectingFetch(message: string): typeof fetch {
+    return ((async (..._args: Parameters<typeof fetch>) => {
+        throw new Error(message)
+    }) as unknown as typeof fetch)
 }
 
 function expectTipPrompt(messages: RecordedMessage[]): RecordedMessage {
@@ -164,6 +188,7 @@ async function fulfillSummaryRequest(
         messageId: prompt.eventId,
         senderAddress: USER_ID,
         receiverAddress: BOT_ID,
+        receiverUserId: BOT_ID,
         amount: 1n,
         currency: '0x0000000000000000000000000000000000000000',
         ...overrides,
@@ -175,7 +200,7 @@ const ORIGINAL_FETCH = globalThis.fetch
 
 describe('summarize command', () => {
     beforeEach(() => {
-        storage = new InMemoryMessageStorage()
+        storage = new InMemoryStorage()
         process.env.OPENAI_API_KEY = 'test-api-key'
         tipEventCounter = 0
         __setHistoryBackfillHooks({
@@ -202,7 +227,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }) as typeof fetch
+        }) as unknown as typeof fetch
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -225,7 +250,8 @@ describe('summarize command', () => {
 
         await messageHandler({} as BotHandler, messageEvent)
 
-        const { handler, sentMessages } = createActionRecorder()
+        const recorder = createActionRecorder()
+        const { handler, sentMessages } = recorder
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         const slashEvent = {
             command: 'summarize' as const,
@@ -258,9 +284,7 @@ describe('summarize command', () => {
     })
 
     it('waits for a tip before generating summary', async () => {
-        globalThis.fetch = ((async () => {
-            throw new Error('OpenAI API should not run before a tip is received')
-        }) as unknown as typeof fetch)
+        globalThis.fetch = rejectingFetch('OpenAI API should not run before a tip is received')
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -280,7 +304,7 @@ describe('summarize command', () => {
             isMentioned: false,
         })
 
-        const { handler, sentMessages } = createActionRecorder()
+        const { handler, sentMessages, tipCalls } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         await slashHandler(handler, {
             command: 'summarize',
@@ -309,7 +333,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }) as typeof fetch
+        }) as unknown as typeof fetch
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -369,7 +393,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }) as typeof fetch
+        }) as unknown as typeof fetch
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -390,7 +414,7 @@ describe('summarize command', () => {
             isMentioned: false,
         })
 
-        const { handler, sentMessages } = createActionRecorder()
+        const { handler, sentMessages, tipCalls } = createActionRecorder()
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         await slashHandler(handler, {
             command: 'summarize',
@@ -450,7 +474,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }) as typeof fetch
+        }) as unknown as typeof fetch
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -504,7 +528,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }) as typeof fetch
+        }) as unknown as typeof fetch
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -572,7 +596,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }) as typeof fetch
+        }) as unknown as typeof fetch
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -621,9 +645,7 @@ describe('summarize command', () => {
 
     it('reports when no messages have been observed yet', async () => {
         const mockFetch = globalThis.fetch
-        globalThis.fetch = ((async () => {
-            throw new Error('Fetch should not be called when no messages are stored')
-        }) as unknown as typeof fetch)
+        globalThis.fetch = rejectingFetch('Fetch should not be called when no messages are stored')
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -734,7 +756,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }) as typeof fetch
+        }) as unknown as typeof fetch
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -789,7 +811,7 @@ describe('summarize command', () => {
                 }),
                 { status: 200 },
             )
-        }) as typeof fetch
+        }) as unknown as typeof fetch
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -867,9 +889,7 @@ describe('summarize command', () => {
     })
 
     it('surfaces OpenAI request failures gracefully', async () => {
-        globalThis.fetch = ((async () => {
-            throw new Error('Simulated OpenAI outage')
-        }) as unknown as typeof fetch)
+        globalThis.fetch = rejectingFetch('Simulated OpenAI outage')
 
         const mockBot = createMockBot()
         registerTestHandlers(mockBot.bot, storage)
@@ -888,7 +908,8 @@ describe('summarize command', () => {
             isMentioned: false,
         })
 
-        const { handler, sentMessages } = createActionRecorder()
+        const recorder = createActionRecorder()
+        const { handler, sentMessages } = recorder
         const slashHandler = mockBot.getSlashCommandHandler('summarize')
         await slashHandler(handler, {
             command: 'summarize',
@@ -909,5 +930,69 @@ describe('summarize command', () => {
         expect(sentMessages).toHaveLength(2)
         expect(sentMessages[1]?.message).toContain('Failed to generate summary')
         expect(sentMessages[1]?.message).toContain('Simulated OpenAI outage')
+        expect(sentMessages[1]?.message).toContain('Your tip has been refunded.')
+        expect(recorder.tipCalls).toHaveLength(1)
+    })
+
+    it('resaves pending requests and reports when refunding fails', async () => {
+        let fetchAttempts = 0
+        globalThis.fetch = (async (..._args: Parameters<typeof fetch>) => {
+            fetchAttempts += 1
+            if (fetchAttempts === 1) {
+                throw new Error('Temporary failure')
+            }
+            return new Response(
+                JSON.stringify({ choices: [{ message: { content: 'Recovered summary after retry.' } }] }),
+                { status: 200 },
+            )
+        }) as unknown as typeof fetch
+
+        const mockBot = createMockBot()
+        registerTestHandlers(mockBot.bot, storage)
+
+        const messageHandler = mockBot.getMessageHandler()
+        await messageHandler({} as BotHandler, {
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            message: 'Content for retry flow.',
+            eventId: 'retry-msg',
+            userId: USER_ID,
+            createdAt: new Date(),
+            replyId: undefined,
+            threadId: undefined,
+            mentions: [],
+            isMentioned: false,
+        })
+
+        const recorder = createActionRecorder()
+        const { handler, sentMessages } = recorder
+        const slashHandler = mockBot.getSlashCommandHandler('summarize')
+        await slashHandler(handler, {
+            command: 'summarize',
+            args: [],
+            userId: USER_ID,
+            channelId: CHANNEL_ID,
+            spaceId: SPACE_ID,
+            createdAt: new Date(),
+            eventId: 'slash-refund-fail',
+            mentions: [],
+            replyId: undefined,
+            threadId: undefined,
+        })
+
+        const tipPrompt = expectTipPrompt(sentMessages)
+        recorder.failNextTipWith(new Error('Insufficient balance'))
+        await fulfillSummaryRequest(mockBot, handler, tipPrompt)
+
+        expect(sentMessages).toHaveLength(2)
+        expect(sentMessages[1]?.message).toContain('Tip refund failed')
+        expect(recorder.tipCalls).toHaveLength(1)
+
+        await fulfillSummaryRequest(mockBot, handler, tipPrompt)
+
+        expect(sentMessages).toHaveLength(3)
+        const retryResponse = sentMessages[2]
+        expect(retryResponse?.message).toContain('Recovered summary after retry.')
+        expect(fetchAttempts).toBe(2)
     })
 })
